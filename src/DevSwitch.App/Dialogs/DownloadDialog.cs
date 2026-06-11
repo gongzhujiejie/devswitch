@@ -9,12 +9,14 @@
 //       - 仅在用户点击「列出版本」「下载」时联网。
 
 using DevSwitch.App.Services;
+using DevSwitch.App.Localization;
 using DevSwitch.Core;
 using DevSwitch.Downloader;
 using DevSwitch.Sources;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Storage.Pickers;
+using Windows.System;
 using WinRT.Interop;
 
 namespace DevSwitch.App.Dialogs;
@@ -35,6 +37,11 @@ public sealed class DownloadDialog : ContentDialog
     private readonly ComboBox versionCombo;
     private readonly Button listButton;
     private readonly Button chooseDirButton;
+
+    // 国内镜像 injdk.cn 入口：仅在 SDK 类型为 Java 时显示，点击后用 Launcher 打开默认浏览器，
+    // 让国内用户在 Oracle/Adoptium 直链下载较慢时有备选路径，下载到本地后再用「添加本地 SDK」导入。
+    private readonly HyperlinkButton injdkButton;
+
     private readonly TextBlock installDirText;
     private readonly ProgressRing busyRing;
     private readonly TextBlock statusText;
@@ -101,6 +108,21 @@ public sealed class DownloadDialog : ContentDialog
         listButton = new Button { Content = "列出版本" };
         listButton.Click += OnListVersionsClick;
 
+        // 构建国内镜像入口（HyperlinkButton 视觉上不喧宾夺主，原生支持 NavigateUri 但此处仍用 Click
+        // 显式接管以便 try/catch 与 SdkType 切换；按钮文字与 tooltip 走本地化字典，避免硬编码）。
+        var loc = LocalizationManager.Instance;
+        injdkButton = new HyperlinkButton
+        {
+            Content = loc["download.injdk.button"],
+            // 仅 Java 类型可见：选中时 OnSdkTypeSelectionChanged 切换 Visibility。
+            Visibility = Visibility.Collapsed,
+        };
+        ToolTipService.SetToolTip(injdkButton, loc["download.injdk.tooltip"]);
+        injdkButton.Click += OnOpenInjdkMirrorClick;
+
+        // 监听 SDK 类型选择变化，根据当前类型切换镜像入口可见性。
+        sdkTypeCombo.SelectionChanged += OnSdkTypeSelectionChanged;
+
         busyRing = new ProgressRing { Width = 18, Height = 18, IsActive = false, Visibility = Visibility.Collapsed };
 
         // 安装目录显示 + 自定义按钮：让用户知道默认下载位置并可更改。
@@ -133,6 +155,9 @@ public sealed class DownloadDialog : ContentDialog
         var listRow = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
         listRow.Children.Add(listButton);
         listRow.Children.Add(busyRing);
+        // 国内镜像入口紧随「列出版本」按钮，使用 HyperlinkButton 在视觉上区分于主操作按钮，
+        // 且仅当类型为 Java 时通过 Visibility 显示，不影响 Maven/Node/Go 的主流程。
+        listRow.Children.Add(injdkButton);
         panel.Children.Add(listRow);
 
         panel.Children.Add(BuildLabeledRow("版本", versionCombo));
@@ -154,6 +179,9 @@ public sealed class DownloadDialog : ContentDialog
         // 拦截主按钮点击：自行执行异步下载，不关闭对话框直到完成或失败。
         PrimaryButtonClick += OnDownloadClick;
         Closing += OnDialogClosing;
+
+        // 初始按当前 SDK 类型同步镜像入口可见性（构造时 sdkTypeCombo 已选中初始项）。
+        UpdateInjdkButtonVisibility();
     }
 
 
@@ -379,6 +407,45 @@ public sealed class DownloadDialog : ContentDialog
         catch (Exception ex)
         {
             statusText.Text = $"选择目录失败：{ex.Message}";
+        }
+    }
+
+    /// <summary>
+    /// SDK 类型下拉变化：仅 Java 显示国内镜像入口，其它类型隐藏，避免误导。
+    /// </summary>
+    private void OnSdkTypeSelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        UpdateInjdkButtonVisibility();
+    }
+
+    /// <summary>
+    /// 同步「injdk.cn 国内镜像」按钮的可见性：injdk.cn 主要价值在 Java 发行版镜像，
+    /// 因此仅当 SDK 类型为 Java 时显示，其它（Maven / Node.js / Go）一律隐藏。
+    /// </summary>
+    private void UpdateInjdkButtonVisibility()
+    {
+        bool isJava = string.Equals(GetTag(sdkTypeCombo), "Java", StringComparison.OrdinalIgnoreCase);
+        injdkButton.Visibility = isJava ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// 「国内镜像 injdk.cn」点击：用 WinRT Launcher 打开默认浏览器到 https://injdk.cn/，
+    /// 让用户手动下载 JDK 后再通过「添加本地 SDK」导入。
+    /// 安全考虑：URL 为常量可信值，不接收外部输入；fire-and-forget 同时 try/catch 防止 UI 崩溃。
+    /// </summary>
+    private void OnOpenInjdkMirrorClick(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            // NOTE: WinUI 3 桌面应用应优先用 Launcher 而非 Process.Start，
+            //       Launcher 走系统默认浏览器关联，安全且符合 UWP/WinAppSDK 推荐做法。
+            //       此处不 await（事件 handler 同步签名），用 fire-and-forget；任何异常都被外层捕获。
+            _ = Launcher.LaunchUriAsync(new Uri("https://injdk.cn/"));
+        }
+        catch (Exception ex)
+        {
+            // 不让镜像跳转失败干扰主下载流程，仅在状态栏提示。
+            statusText.Text = $"打开镜像站失败：{ex.Message}";
         }
     }
 

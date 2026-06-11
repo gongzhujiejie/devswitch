@@ -209,7 +209,38 @@ public sealed class AppServices : IDisposable
         sourceList.Add(HttpSdkVersionSource.CreateMaven(fetcher));
         sourceList.Add(HttpSdkVersionSource.CreateNode(fetcher));
         sourceList.Add(HttpSdkVersionSource.CreateGo(fetcher));
+
+        // Oracle JDK 官方源（NFTC /latest/）：与 Adoptium 并存，覆盖只认 Oracle JDK 的企业项目。
+        // 探活用 HTTP HEAD：复用共享 HttpClient，命中 200/2xx 才视为可用，
+        // 失败/超时/网络异常都回退为"不存在"，避免单个发行版下线拖垮整个版本列表。
+        sourceList.Add(new OracleJdkSource(ProbeOracleJdkAliveAsync));
         return new SdkSourceCatalog(sourceList);
+    }
+
+    /// <summary>
+    /// Oracle JDK NFTC 直链存活探活：复用共享 HttpClient 发 HEAD，仅依据 2xx 视为可下载。
+    /// </summary>
+    /// <remarks>
+    /// 任何异常（超时、DNS、HTTP 4xx/5xx）一律视为不可用，由 OracleJdkSource 跳过该大版本。
+    /// 单次探活在 HttpClient 默认超时内完成，不会显著拖慢"列出版本"流程。
+    /// </remarks>
+    private async Task<bool> ProbeOracleJdkAliveAsync(string url, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Head, url);
+        try
+        {
+            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            return response.IsSuccessStatusCode;
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // 调用方主动取消应继续向上传递，不当作"不存在"。
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>

@@ -49,6 +49,10 @@ public static class LocalizationStrings
         ["settings.feedback"] = "反馈",
         ["settings.checkUpdate"] = "检查更新",
 
+        // 下载对话框
+        ["download.injdk.button"] = "国内镜像 injdk.cn",
+        ["download.injdk.tooltip"] = "Oracle/Adoptium 下载较慢时可前往 injdk.cn 手动下载，再用「添加本地 SDK」导入。",
+
         // 语言名
         ["language.auto"] = "跟随系统",
         ["language.zhCN"] = "简体中文",
@@ -100,6 +104,10 @@ public static class LocalizationStrings
         ["settings.update"] = "Update",
         ["settings.feedback"] = "Feedback",
         ["settings.checkUpdate"] = "Check Update",
+
+        // Download dialog
+        ["download.injdk.button"] = "China mirror: injdk.cn",
+        ["download.injdk.tooltip"] = "If Oracle/Adoptium downloads are slow, get the JDK from injdk.cn and use \"Add Local SDK\".",
 
         // Language names
         ["language.auto"] = "System Default",

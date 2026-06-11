@@ -859,6 +859,50 @@ bool DirectoryExists(const std::wstring& path) {
     return attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
+// 判断目录是否为空（仅含 "." / ".."）。
+//   - 若枚举失败（权限/不存在等），保守返回 false，避免在不能确认时误删。
+//   - 仅枚举一层，不递归；空目录的判断对 RemoveDirectoryW 成立的前提是「无任何条目」。
+// 用于 SwitchSdkCore / CreateCurrentLinkOperation 自愈被实体化的空 current 目录：
+//   有的发布包/旧版本残留会把 current\<type> 留成普通空目录，使切换被拒。
+//   只清理空目录足以解决；非空真实目录绝不触碰，保护用户可能误放进去的真实数据。
+bool IsDirectoryEmpty(const std::wstring& pathW) {
+    std::wstring pattern = CombinePath(pathW, L"*");
+    WIN32_FIND_DATAW fd{};
+    HANDLE h = FindFirstFileW(pattern.c_str(), &fd);
+    if (h == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    bool empty = true;
+    do {
+        const wchar_t* name = fd.cFileName;
+        if (name[0] == L'.' && (name[1] == L'\0' || (name[1] == L'.' && name[2] == L'\0'))) {
+            continue;
+        }
+        empty = false;
+        break;
+    } while (FindNextFileW(h, &fd));
+
+    FindClose(h);
+    return empty;
+}
+
+// 若 currentPath 是「空的真实目录」，删除它并返回 true，让调用方按「不存在」继续走创建链接流程。
+// 非真实目录、非空真实目录、删除失败时一律返回 false，由调用方维持原有拒绝路径。
+// 设计要点：
+//   1) 只对 linkType == "real-directory" 触发；junction/symlink 等 reparse 入口不在此自愈。
+//   2) RemoveDirectoryW 自身只能删空目录，对非空目录返回 ERROR_DIR_NOT_EMPTY，是第二层保险。
+//   3) 自愈不递归、不改名备份，绝不在用户目录下做扩展行为。
+bool TryHealEmptyRealDirectory(const std::wstring& pathW, const LinkInfo& info) {
+    if (info.linkType != "real-directory") {
+        return false;
+    }
+    if (!IsDirectoryEmpty(pathW)) {
+        return false;
+    }
+    return RemoveDirectoryW(pathW.c_str()) != 0;
+}
+
 bool EnsureDirectoryRecursive(const std::wstring& directory, DWORD& error) {
     if (directory.empty()) {
         error = ERROR_PATH_NOT_FOUND;
@@ -1039,13 +1083,22 @@ OperationResult CreateCurrentLinkOperation(const HelperRequest& request) {
     std::wstring targetPathW = Utf8ToWide(*targetPath);
     LinkInfo existing = InspectLinkPath(currentPathW);
     if (existing.exists) {
+        // 自愈：若是空的真实目录（常见为旧版本/发布包残留的占位目录），删除后按「不存在」继续创建链接。
+        // 非空真实目录、真实文件、其他 reparse 入口仍维持原有拒绝路径，绝不动用户数据。
         if (existing.linkType == "real-directory") {
-            return OperationResult{ false, 3, "unsafe-existing-directory", "current path is a real directory", LinkInfoDetails(existing, *currentPath) };
+            if (TryHealEmptyRealDirectory(currentPathW, existing)) {
+                existing = LinkInfo{};
+            }
+            else {
+                return OperationResult{ false, 3, "unsafe-existing-directory", "current path is a real directory", LinkInfoDetails(existing, *currentPath) };
+            }
         }
-        if (existing.linkType == "real-file") {
+        else if (existing.linkType == "real-file") {
             return OperationResult{ false, 3, "unsafe-existing-file", "current path is a real file", LinkInfoDetails(existing, *currentPath) };
         }
-        return OperationResult{ false, 3, "unsafe-reparse-point", "current path already exists", LinkInfoDetails(existing, *currentPath) };
+        else {
+            return OperationResult{ false, 3, "unsafe-reparse-point", "current path already exists", LinkInfoDetails(existing, *currentPath) };
+        }
     }
 
     OperationResult created = CreateJunctionRaw(currentPathW, targetPathW);
@@ -1137,7 +1190,14 @@ OperationResult SwitchSdkCore(const std::wstring& currentPathW, const std::wstri
 
     LinkInfo before = InspectLinkPath(currentPathW);
     if (before.linkType == "real-directory") {
-        return OperationResult{ false, 3, "current-path-not-managed-link", "current path is a real directory", LinkInfoDetails(before, currentPathUtf8) };
+        // 自愈：空的真实目录（如旧版本残留的占位）删除后按「不存在」继续。
+        // 非空真实目录维持拒绝，避免误删用户实际数据。
+        if (TryHealEmptyRealDirectory(currentPathW, before)) {
+            before = LinkInfo{};
+        }
+        else {
+            return OperationResult{ false, 3, "current-path-not-managed-link", "current path is a real directory", LinkInfoDetails(before, currentPathUtf8) };
+        }
     }
     if (before.linkType == "real-file") {
         return OperationResult{ false, 3, "current-path-is-file", "current path is a real file", LinkInfoDetails(before, currentPathUtf8) };

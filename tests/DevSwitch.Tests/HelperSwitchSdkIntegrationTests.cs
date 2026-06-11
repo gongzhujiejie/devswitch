@@ -37,6 +37,32 @@ public sealed class HelperSwitchSdkIntegrationTests
     }
 
     [Fact]
+    public async Task SwitchSdkHealsEmptyPlainCurrentDirectory()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var tempRoot = HelperProcessTestSupport.CreateTemporaryDirectory();
+        var currentPath = Path.Combine(tempRoot, "current", "java");
+        var targetPath = Path.Combine(tempRoot, "sdks", "jdk-21");
+        Directory.CreateDirectory(currentPath);
+        Directory.CreateDirectory(targetPath);
+        await File.WriteAllTextAsync(Path.Combine(targetPath, "sentinel.txt"), "target");
+
+        var result = await InvokeSwitchAsync("switch-heal-empty-real-dir", currentPath, targetPath);
+        var response = result.DeserializeResponse();
+        var inspect = (await InvokeHelperAsync("inspect-after-heal-empty", "inspectLink", new { currentPath })).DeserializeResponse();
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(response.Success);
+        Assert.Equal("junction", inspect.Details!.Value.GetProperty("linkType").GetString());
+        Assert.Equal(Path.GetFullPath(targetPath), Path.GetFullPath(inspect.Details.Value.GetProperty("targetPath").GetString()!));
+        Assert.True(File.Exists(Path.Combine(currentPath, "sentinel.txt")));
+    }
+
+    [Fact]
     public async Task SwitchSdkReplacesManagedCurrentLinkFromAToB()
     {
         if (!OperatingSystem.IsWindows())

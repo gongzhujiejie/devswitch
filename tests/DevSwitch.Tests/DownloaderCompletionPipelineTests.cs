@@ -71,6 +71,64 @@ public sealed class DownloaderCompletionPipelineTests
         Assert.True(extractor.Called);
     }
 
+    [Fact]
+    public async Task CompleteRegistersNestedSingleRootAsRealSdkPath()
+    {
+        // Temurin / Maven / Node / Go 的官方 zip 通常多带一层根目录（如 jdk8u472-b08）。
+        // 解压后若 installDirectory 下只有一个子目录、无任何文件，应把这个子目录作为真实 SDK 根登记到 catalog，
+        // 否则 bin/java.exe 等关键文件无法被找到，切换/检测都会失败。
+        var bytes = System.Text.Encoding.UTF8.GetBytes("nested-zip");
+        var archivePath = await WriteTempFileAsync(bytes);
+        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+        var installRoot = Path.Combine(Path.GetDirectoryName(archivePath)!, "install");
+        var extractor = new SimulatedExtractor(targetDir =>
+        {
+            // 模拟 zip 内单根目录（jdk8u472-b08）解压后的目录结构。
+            var nested = Path.Combine(targetDir, "jdk8u472-b08");
+            Directory.CreateDirectory(Path.Combine(nested, "bin"));
+            File.WriteAllText(Path.Combine(nested, "release"), "JAVA_VERSION=\"1.8.0_472\"");
+            File.WriteAllText(Path.Combine(nested, "bin", "java.exe"), "stub");
+        });
+        var registrar = new RecordingRegistrar();
+        var pipeline = new DownloadCompletionPipeline(extractor, registrar);
+
+        var result = await pipeline.CompleteAsync(CreateTask(sha), archivePath, installRoot);
+
+        Assert.Equal(DownloadStatus.Completed, result.Task.Status);
+        Assert.NotNull(registrar.LastRegistration);
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine(installRoot, "jdk8u472-b08")),
+            Path.GetFullPath(registrar.LastRegistration!.InstallDirectory));
+    }
+
+    [Fact]
+    public async Task CompleteKeepsInstallDirectoryWhenZipHasNoSingleRoot()
+    {
+        // zip 内无统一外层目录（直接 bin/、release 散在根下）时不应下探，否则会少注册一层。
+        var bytes = System.Text.Encoding.UTF8.GetBytes("flat-zip");
+        var archivePath = await WriteTempFileAsync(bytes);
+        var sha = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+
+        var installRoot = Path.Combine(Path.GetDirectoryName(archivePath)!, "install-flat");
+        var extractor = new SimulatedExtractor(targetDir =>
+        {
+            // 解压后顶层既有目录（bin）也有文件（release），不构成「单根」，保持原 installDirectory。
+            Directory.CreateDirectory(Path.Combine(targetDir, "bin"));
+            File.WriteAllText(Path.Combine(targetDir, "release"), "JAVA_VERSION=\"1.8.0_472\"");
+        });
+        var registrar = new RecordingRegistrar();
+        var pipeline = new DownloadCompletionPipeline(extractor, registrar);
+
+        var result = await pipeline.CompleteAsync(CreateTask(sha), archivePath, installRoot);
+
+        Assert.Equal(DownloadStatus.Completed, result.Task.Status);
+        Assert.NotNull(registrar.LastRegistration);
+        Assert.Equal(
+            Path.GetFullPath(installRoot),
+            Path.GetFullPath(registrar.LastRegistration!.InstallDirectory));
+    }
+
     private static DownloadTask CreateTask(string? expectedSha256)
     {
         return DownloadTask.CreateQueued(
@@ -99,6 +157,27 @@ public sealed class DownloaderCompletionPipelineTests
         public Task ExtractAsync(string archivePath, string destinationDirectory, CancellationToken cancellationToken = default)
         {
             Called = true;
+            return Task.CompletedTask;
+        }
+    }
+
+    /// <summary>
+    /// 测试桩解压器：用回调在 destinationDirectory 中模拟真实解压后的目录结构，
+    /// 用于验证 pipeline 后续「下探单根」逻辑能否识别 zip 内的嵌套布局。
+    /// </summary>
+    private sealed class SimulatedExtractor : IArchiveExtractor
+    {
+        private readonly Action<string> populate;
+
+        public SimulatedExtractor(Action<string> populate)
+        {
+            this.populate = populate;
+        }
+
+        public Task ExtractAsync(string archivePath, string destinationDirectory, CancellationToken cancellationToken = default)
+        {
+            Directory.CreateDirectory(destinationDirectory);
+            populate(destinationDirectory);
             return Task.CompletedTask;
         }
     }

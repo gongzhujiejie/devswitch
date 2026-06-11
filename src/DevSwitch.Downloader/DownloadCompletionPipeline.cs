@@ -83,6 +83,14 @@ public sealed class DownloadCompletionPipeline
             var extractingTask = task with { Status = DownloadStatus.Extracting };
             await _extractor.ExtractAsync(archivePath, installDirectory, cancellationToken).ConfigureAwait(false);
 
+            // 第二步补：下探 zip 内的「单根目录」。
+            // Temurin / Maven / Node / Go 的官方包通常都多带一层根目录（如 jdk8u472-b08、apache-maven-3.9.9、
+            // node-v22.11.0-win-x64、go），如果直接把外层 installDirectory 登记进 catalog，
+            // bin/java.exe 等关键文件路径就会少一层、检测和切换都会失败。
+            // 规则：仅当 installDirectory 直接孩子是 1 个目录 + 0 个文件时下探一层；其它形态保持原路径，
+            // 避免误把多顶层（散平的 zip）当成单根。
+            string sdkRootDirectory = ResolveSdkRootDirectory(installDirectory);
+
             // 第三步：登记托管 SDK（真实版本识别与 sdks.json 写入交给 Core 实现）。
             var registration = new ManagedSdkRegistration(
                 TaskId: task.Id,
@@ -90,7 +98,7 @@ public sealed class DownloadCompletionPipeline
                 Version: task.Version,
                 Distribution: task.Distribution,
                 Arch: task.Arch,
-                InstallDirectory: installDirectory);
+                InstallDirectory: sdkRootDirectory);
             await _registrar.RegisterAsync(registration, cancellationToken).ConfigureAwait(false);
 
             return new DownloadCompletionResult(
@@ -107,6 +115,50 @@ public sealed class DownloadCompletionPipeline
         {
             // 解压或登记异常统一标记失败，附带原因摘要。
             return new DownloadCompletionResult(task with { Status = DownloadStatus.Failed }, null, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// 若 <paramref name="installDirectory"/> 解压后恰好「只有一个子目录、没有任何文件」，
+    /// 说明 zip 内多带了一层根目录（典型如 Temurin <c>jdk8u472-b08</c>），返回这个真实 SDK 根；
+    /// 否则原样返回 <paramref name="installDirectory"/>。
+    /// </summary>
+    /// <remarks>
+    /// 设计要点：
+    /// - 仅识别「1 子目录 + 0 文件」这一种形态，避免误伤散平 zip（带多个顶层条目）。
+    /// - 目录不存在或访问异常时保守返回原路径，让登记仍按原行为继续，不阻塞下载流程。
+    /// </remarks>
+    private static string ResolveSdkRootDirectory(string installDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(installDirectory) || !Directory.Exists(installDirectory))
+        {
+            return installDirectory;
+        }
+
+        try
+        {
+            var entries = Directory.GetFileSystemEntries(installDirectory);
+            if (entries.Length != 1)
+            {
+                return installDirectory;
+            }
+
+            var only = entries[0];
+            if (!Directory.Exists(only))
+            {
+                // 顶层只有一个文件不算单根，保持原路径。
+                return installDirectory;
+            }
+
+            return only;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return installDirectory;
+        }
+        catch (IOException)
+        {
+            return installDirectory;
         }
     }
 }

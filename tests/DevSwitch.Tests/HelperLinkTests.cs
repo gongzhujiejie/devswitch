@@ -83,6 +83,32 @@ public sealed class HelperLinkTests
     }
 
     [Fact]
+    public async Task CreateCurrentLinkHealsEmptyPlainCurrentDirectory()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var tempRoot = HelperProcessTestSupport.CreateTemporaryDirectory();
+        var currentPath = Path.Combine(tempRoot, "current", "java");
+        var targetPath = Path.Combine(tempRoot, "sdks", "java", "jdk-21");
+        Directory.CreateDirectory(currentPath);
+        Directory.CreateDirectory(targetPath);
+        await File.WriteAllTextAsync(Path.Combine(targetPath, "sentinel.txt"), "target");
+
+        var result = await InvokeLinkHelperAsync("create-heal-empty-real-dir", "createCurrentLink", new { currentPath, targetPath, linkPreference = "junction-first" });
+        var response = result.DeserializeResponse();
+        var inspect = (await InvokeLinkHelperAsync("inspect-created-from-empty", "inspectLink", new { currentPath })).DeserializeResponse();
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.True(response.Success);
+        Assert.Equal("junction", inspect.Details!.Value.GetProperty("linkType").GetString());
+        Assert.Equal(Path.GetFullPath(targetPath), Path.GetFullPath(inspect.Details.Value.GetProperty("targetPath").GetString()!));
+        Assert.True(File.Exists(Path.Combine(currentPath, "sentinel.txt")));
+    }
+
+    [Fact]
     public async Task CreateCurrentLinkFailsWhenTargetDirectoryDoesNotExist()
     {
         if (!OperatingSystem.IsWindows())
