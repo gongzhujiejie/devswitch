@@ -8,7 +8,7 @@
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![WinUI](https://img.shields.io/badge/UI-WinUI%203-2563EB)](https://learn.microsoft.com/windows/apps/winui/)
 [![Language](https://img.shields.io/badge/lang-C%23%20%7C%20C%2B%2B-178600)](https://github.com/gongzhujiejie/devswitch)
-[![Release](https://img.shields.io/badge/release-v0.1.0-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
+[![Release](https://img.shields.io/badge/release-v0.2.4-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Self-Update](https://img.shields.io/badge/self--update-GitHub-purple?logo=github)](https://github.com/gongzhujiejie/devswitch/releases)
 
@@ -35,6 +35,7 @@
 - [🛠️ 使用示例](#️-使用示例)
 - [⚙️ 配置说明](#️-配置说明)
 - [🔄 自动更新](#-自动更新)
+- [📝 更新日志](#-更新日志)
 - [❓ 常见问题（FAQ）](#-常见问题faq)
 - [🗺️ Roadmap](#️-roadmap)
 - [🤝 贡献指南](#-贡献指南)
@@ -207,7 +208,12 @@ DevSwitch 支持从 GitHub 仓库一键自更新（下载 → 校验 → 覆盖 
    - 上传 Windows 安装包 zip，文件名含 `win` 与 `x64`、以 `.zip` 结尾，例如 `DevSwitch-win10-x64.zip`。
    - （推荐）附带同名 `.sha256` 校验文件以校验完整性。
 
-   生成校验文件：
+   > 💡 本仓库已配置 **GitHub Actions 自动发布**（见 `.github/workflows/release.yml`）：
+   > 只需把 `src/DevSwitch.App/DevSwitch.App.csproj` 里的 `<Version>` 改成新版本号，
+   > 提交后推送一个 `vX.Y.Z` tag，CI 会自动在 Windows runner 上构建、打包并发布 Release，
+   > 同时附带 `DevSwitch-win10-x64.zip` 与 `.sha256`，无需手动打包。
+
+   如需手动生成校验文件：
 
    ```powershell
    (Get-FileHash DevSwitch-win10-x64.zip -Algorithm SHA256).Hash.ToLower() `
@@ -217,6 +223,12 @@ DevSwitch 支持从 GitHub 仓库一键自更新（下载 → 校验 → 覆盖 
 3. 在 DevSwitch 中点「**检查更新**」→「**下载并更新**」，应用会自动完成升级并重启。
 
 > 自更新由独立的 `DevSwitch.Updater.exe` 在主程序退出后执行覆盖，安装目录位于受保护位置时会按需提权。
+
+---
+
+## 📝 更新日志
+
+完整版本历史见 [CHANGELOG.md](./CHANGELOG.md)。最新稳定版本为 **v0.2.4**。
 
 ---
 
