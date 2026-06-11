@@ -67,15 +67,19 @@ public sealed partial class MainWindow : Window
     /// <param name="appServices">App 组合根，集中提供切换/验证/删除/诊断/重置/更新/下载等后端服务。</param>
     public MainWindow(MainWindowViewModel viewModel, string dataRoot, DevSwitch.App.Services.AppServices appServices)
     {
+        // 重要：先赋值依赖字段，再调用 InitializeComponent()。
+        // XAML 中若有 IsSelected="True" 等设置会在 InitializeComponent 期间立刻触发 SelectionChanged
+        // 之类的事件 handler，handler 通常会读 this.viewModel；若此时字段还没赋值，会抛 NullReferenceException
+        // 把整个 InitializeComponent 包成 XamlParseException，主窗口构造直接失败、应用闪退。
+        this.viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        this.dataRoot = dataRoot ?? throw new ArgumentNullException(nameof(dataRoot));
+        this.appServices = appServices ?? throw new ArgumentNullException(nameof(appServices));
+
         InitializeComponent();
         InitializeSdkListViewLayout();
 
         Title = "DevSwitch";
         InitializeCustomTitleBar();
-
-        this.viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
-        this.dataRoot = dataRoot ?? throw new ArgumentNullException(nameof(dataRoot));
-        this.appServices = appServices ?? throw new ArgumentNullException(nameof(appServices));
         localSdkImportService = new LocalSdkImportService(this.dataRoot);
         RootGrid.DataContext = viewModel;
 

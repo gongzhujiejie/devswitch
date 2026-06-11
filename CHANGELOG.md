@@ -5,6 +5,16 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.8] - 2026-06-11 — 紧急修复 v0.2.7 启动崩溃
+
+### 修复（Fixed）
+- **v0.2.7 双击 `DevSwitch.App.exe` 闪退**：v0.2.7 状态过滤 ComboBox 第一项设置了 `IsSelected="True"`，
+  XAML 解析期间立即触发 `SelectionChanged`，但此时 `viewModel` 字段尚未在构造函数里赋值，
+  抛 `NullReferenceException`，被 `InitializeComponent` 包成 `XamlParseException`，主窗口构造失败、应用闪退。
+  - 调整 `MainWindow` 构造顺序：先赋值 `viewModel / dataRoot / appServices` 字段，再调用 `InitializeComponent()`。
+  - `OnStatusFilterChanged` 增加 `viewModel is null` 早期返回，作为双层防御。
+- 强烈建议所有装了 v0.2.7 的用户升级到 v0.2.8。
+
 ## [v0.2.7] - 2026-06-11
 
 ### 新增（Added）
@@ -92,6 +102,7 @@
 - GitHub 一键自更新：下载 → 校验 → 覆盖 → 重启，全程保护用户数据目录。
 - 灵活数据目录：便携 / 固定 C 盘 / 自定义三种模式，支持带进度迁移。
 
+[v0.2.8]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.8
 [v0.2.7]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.7
 [v0.2.6]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.6
 [v0.2.5]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.5

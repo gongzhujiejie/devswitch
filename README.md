@@ -8,7 +8,7 @@
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![WinUI](https://img.shields.io/badge/UI-WinUI%203-2563EB)](https://learn.microsoft.com/windows/apps/winui/)
 [![Language](https://img.shields.io/badge/lang-C%23%20%7C%20C%2B%2B-178600)](https://github.com/gongzhujiejie/devswitch)
-[![Release](https://img.shields.io/badge/release-v0.2.7-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
+[![Release](https://img.shields.io/badge/release-v0.2.8-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Self-Update](https://img.shields.io/badge/self--update-GitHub-purple?logo=github)](https://github.com/gongzhujiejie/devswitch/releases)
 
@@ -228,7 +228,7 @@ DevSwitch 支持从 GitHub 仓库一键自更新（下载 → 校验 → 覆盖 
 
 ## 📝 更新日志
 
-完整版本历史见 [CHANGELOG.md](./CHANGELOG.md)。最新稳定版本为 **v0.2.7**。
+完整版本历史见 [CHANGELOG.md](./CHANGELOG.md)。最新稳定版本为 **v0.2.8**。
 
 ---
 

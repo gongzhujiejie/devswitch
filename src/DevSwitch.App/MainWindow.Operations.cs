@@ -49,6 +49,14 @@ public sealed partial class MainWindow
     /// </summary>
     private void OnStatusFilterChanged(object sender, SelectionChangedEventArgs e)
     {
+        // XAML 中 ComboBoxItem 上的 IsSelected="True" 会在 InitializeComponent 期间立即触发本 handler，
+        // 此时构造函数尚未把依赖字段赋值；任何依赖 viewModel 的 handler 都必须先做 null 防御，
+        // 避免一行 NRE 把 InitializeComponent 包装成 XamlParseException、主窗口构造直接失败。
+        if (viewModel is null)
+        {
+            return;
+        }
+
         if (sender is not ComboBox combo || combo.SelectedItem is not ComboBoxItem item)
         {
             return;
