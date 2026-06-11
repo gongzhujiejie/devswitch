@@ -81,7 +81,7 @@ public static class DevSwitchSettingsStore
             Language: "auto",
             Download: new DownloadSettings(Parallelism: 4, KeepArchives: false, PreferredMirror: null),
             Compatibility: new CompatibilitySettings(SetJdkHome: false, SetM2Home: false),
-            Update: new UpdateSettings(Source: "github-releases", FallbackSource: null));
+            Update: new UpdateSettings(Source: "github-releases", FallbackSource: null, Repository: "gongzhujiejie/devswitch"));
     }
 
     /// <summary>

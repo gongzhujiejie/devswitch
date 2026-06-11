@@ -24,10 +24,19 @@ namespace DevSwitch.App;
 public sealed partial class MainWindow
 {
     // GitHub 反馈页地址；点击「反馈」时用系统默认浏览器打开。
-    private const string FeedbackUrl = "https://github.com/devswitch/devswitch/issues";
+    private const string FeedbackUrl = "https://github.com/gongzhujiejie/devswitch/issues";
 
-    // 当前应用版本，用于「检查更新」比较。
-    private const string CurrentAppVersion = "v0.1.0";
+    // 当前应用版本（用于「检查更新」比较）：从程序集版本读取，集中在 csproj &lt;Version&gt; 维护。
+    // 这样发新版只改 csproj 并重新打包，新包版本号就真比旧版高，自更新可被正确判定与验证。
+    private static string CurrentAppVersion
+    {
+        get
+        {
+            var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+            // 程序集版本形如 0.2.0.0；取前三段拼成 vX.Y.Z，与 GitHub release tag（vX.Y.Z）一致便于比较。
+            return version is null ? "v0.0.0" : $"v{version.Major}.{version.Minor}.{version.Build}";
+        }
+    }
 
     // 设置初始化标记：避免在代码设置 ComboBox 初值时误触发持久化。
     private bool isSettingsInitializing;
@@ -1049,8 +1058,10 @@ public sealed partial class MainWindow
             // 数据目录：显示当前生效路径与是否自定义。
             UpdateDataRootText();
 
-            // 更新：回填 GitHub 仓库与当前版本号。
-            UpdateRepositoryTextBox.Text = settings.Update.Repository ?? string.Empty;
+            // 更新：回填 GitHub 仓库与当前版本号。仓库为空时用默认仓库占位，方便用户直接检查更新。
+            UpdateRepositoryTextBox.Text = string.IsNullOrWhiteSpace(settings.Update.Repository)
+                ? "gongzhujiejie/devswitch"
+                : settings.Update.Repository;
             UpdateCurrentVersionText.Text = $"DevSwitch 当前版本 {CurrentAppVersion}";
         }
         catch
@@ -1123,8 +1134,8 @@ public sealed partial class MainWindow
 
         try
         {
-            var settings = await DevSwitchSettingsStore.LoadOrCreateAsync(dataRoot);
-            string? repo = settings.Update.Repository;
+            // 以输入框当前值为准（已回填默认仓库），避免旧 settings.json 中 Repository 为空导致无法检查。
+            string repo = UpdateRepositoryTextBox.Text?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(repo))
             {
                 UpdateStatusText.Text = "请先填写 GitHub 仓库（owner/repo）再检查更新。";

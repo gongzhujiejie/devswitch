@@ -1,0 +1,71 @@
+name: Release
+
+# 触发：推送 v 开头的 tag（如 v0.2.0）时自动构建并发布 release。
+on:
+  push:
+    tags:
+      - "v*"
+
+# 授予写仓库内容权限，softprops/action-gh-release 用内置 GITHUB_TOKEN 上传附件，无需额外 PAT。
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # windows-latest 自带 MinGW g++（C:\mingw64\bin），确保它在 PATH 中。
+      - name: Ensure MinGW g++ on PATH
+        shell: pwsh
+        run: |
+          $candidates = @('C:\mingw64\bin', 'C:\ProgramData\mingw64\mingw64\bin', "$env:ChocolateyInstall\bin")
+          foreach ($p in $candidates) {
+            if (Test-Path (Join-Path $p 'g++.exe')) {
+              Add-Content -Path $env:GITHUB_PATH -Value $p
+              Write-Host "Added to PATH: $p"
+            }
+          }
+          # 验证 g++ 可用；若 runner 镜像未自带则用 choco 安装 mingw。
+          if (-not (Get-Command g++ -ErrorAction SilentlyContinue) -and -not (Test-Path 'C:\mingw64\bin\g++.exe')) {
+            Write-Host "g++ not found, installing mingw via choco..."
+            choco install mingw -y --no-progress
+            Add-Content -Path $env:GITHUB_PATH -Value 'C:\ProgramData\mingw64\mingw64\bin'
+          }
+
+      - name: Print toolchain versions
+        shell: pwsh
+        run: |
+          dotnet --version
+          g++ --version
+
+      # 从 tag 推导版本号（v0.2.0 -> 0.2.0），传给打包脚本覆盖 csproj <Version>。
+      - name: Resolve version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $ver = $tag.TrimStart('v')
+          echo "version=$ver" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Building version: $ver (tag: $tag)"
+
+      - name: Build and package
+        shell: pwsh
+        run: ./scripts/ci-build-package.ps1 -Version "${{ steps.ver.outputs.version }}"
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: |
+            artifacts/release/DevSwitch-win10-x64.zip
+            artifacts/release/DevSwitch-win10-x64.zip.sha256
