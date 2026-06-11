@@ -1,0 +1,869 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using DevSwitch.App.ViewModels;
+using DevSwitch.Core;
+using Microsoft.UI;
+using Microsoft.UI.Windowing;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
+using Windows.Graphics;
+using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
+
+namespace DevSwitch.App;
+
+/// <summary>
+/// DevSwitch 主窗口。
+/// 当前承载 tubatools 风格自绘标题栏与 Gallery 风格手写侧栏，绑定假数据 ViewModel，不执行真实 SDK 切换。
+/// </summary>
+public sealed partial class MainWindow : Window
+{
+    private readonly MainWindowViewModel viewModel;
+    private readonly string dataRoot;
+    private readonly DevSwitch.App.Services.AppServices appServices;
+    private readonly LocalSdkImportService localSdkImportService;
+    private readonly CancellationTokenSource windowLifetime = new();
+    private bool isSidebarExpanded = true;
+
+    // 防止同一行/同一操作重复触发的繁忙标记。
+    private bool isRowOperationBusy;
+    private bool isDoctorRunning;
+
+    // SDK 子菜单（Java/Maven/Node/Go）展开状态：用户点 SDK 管理父项可手动展开/收起。默认展开。
+    private bool isSdkSubmenuExpanded = true;
+
+    // SDK 总览页卡片数据源（按分类汇总）。
+    private readonly System.Collections.ObjectModel.ObservableCollection<DevSwitch.Core.SdkCategorySummary> sdkOverviewSummaries = new();
+
+    private Button? currentNavigationButton;
+    private Border? currentNavigationIndicator;
+    private FrameworkElement? currentContent;
+
+    private Button[] navigationButtons = System.Array.Empty<Button>();
+    private Border[] navigationIndicators = System.Array.Empty<Border>();
+    private TextBlock[] navigationTextBlocks = System.Array.Empty<TextBlock>();
+
+    private readonly SolidColorBrush navTransparentBrush = new(Colors.Transparent);
+    private Brush? navHoverBrush;
+    private Brush? navPressedBrush;
+    private Brush? navSelectedHoverBrush;
+    private Brush? navHoverBorderBrush;
+    private Brush? navSelectedBorderBrush;
+    private Brush? selectedNavigationBrush;
+    private Brush? navIconBrush;
+    private Brush? navSelectedTextBrush;
+
+    /// <summary>
+    /// 创建主窗口、设置自绘标题栏、设置初始尺寸，并绑定真实 SDK catalog ViewModel。
+    /// </summary>
+    /// <param name="viewModel">主窗口 ViewModel，由 App 组合根注入。</param>
+    /// <param name="dataRoot">DevSwitch 数据根目录，用于本地 SDK 导入服务。</param>
+    /// <param name="appServices">App 组合根，集中提供切换/验证/删除/诊断/重置/更新/下载等后端服务。</param>
+    public MainWindow(MainWindowViewModel viewModel, string dataRoot, DevSwitch.App.Services.AppServices appServices)
+    {
+        InitializeComponent();
+        InitializeSdkListViewLayout();
+
+        Title = "DevSwitch";
+        InitializeCustomTitleBar();
+
+        this.viewModel = viewModel ?? throw new ArgumentNullException(nameof(viewModel));
+        this.dataRoot = dataRoot ?? throw new ArgumentNullException(nameof(dataRoot));
+        this.appServices = appServices ?? throw new ArgumentNullException(nameof(appServices));
+        localSdkImportService = new LocalSdkImportService(this.dataRoot);
+        RootGrid.DataContext = viewModel;
+
+        InitializeNavigationCaches();
+        InitializeNavigationVisuals();
+        // 绑定 SDK 总览卡片数据源。
+        SdkOverviewCards.ItemsSource = sdkOverviewSummaries;
+        ToolTipService.SetToolTip(TitlePaneToggleButton, "折叠导航");
+        SetNavigationSelection(HomeNavButton, HomeIndicator);
+        SetActiveContent(HomeContent);
+
+        // 订阅语言变更：用户在设置页切换语言后即时刷新所有界面文案，无需重启。
+        DevSwitch.App.Localization.LocalizationManager.Instance.LanguageChanged += OnLanguageChanged;
+        // 首帧按当前语言刷新一次导航/设置文案（默认中文；启动后会按 settings 再校正）。
+        RefreshLocalizedTexts();
+
+        RootGrid.Loaded += OnRootGridLoaded;
+        Closed += OnMainWindowClosed;
+        // 默认窗口尺寸加大：原 1180x760 在 SDK 管理页右侧操作区（状态下拉/操作列）会被裁切，
+        // 放大到 1320x860 让工具栏与表格操作列完整可见，不需要用户手动拉伸。
+        ResizeWindow(1320, 860);
+    }
+
+    /// <summary>
+    /// 语言变更事件处理：回到 UI 线程刷新所有本地化文案。
+    /// </summary>
+    private void OnLanguageChanged(object? sender, EventArgs e)
+    {
+        RefreshLocalizedTexts();
+    }
+
+    /// <summary>
+    /// 按当前语言刷新导航与设置页的本地化文案（即时热切换的核心刷新点）。
+    /// 只更新文本属性，不重建控件，保证切换流畅不卡顿。
+    /// </summary>
+    private void RefreshLocalizedTexts()
+    {
+        var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
+
+        // 导航栏文本。
+        NavMainHeaderText.Text = loc["nav.section"];
+        HomeNavText.Text = loc["nav.home"];
+        SdkNavText.Text = loc["nav.sdk"];
+        ProfilesNavText.Text = loc["nav.profiles"];
+        DoctorNavText.Text = loc["nav.doctor"];
+        LogsNavText.Text = loc["nav.logs"];
+        SettingsNavText.Text = loc["nav.settings"];
+
+        // 设置页标题与副标题、语言分区。
+        if (SettingsTitleText is not null)
+        {
+            SettingsTitleText.Text = loc["settings.title"];
+            SettingsSubtitleText.Text = loc["settings.subtitle"];
+            SettingsLanguageHeaderText.Text = loc["settings.language"];
+            SettingsLanguageDescText.Text = loc["settings.language.desc"];
+        }
+
+        // 语言状态行（当前语言：xxx）。
+        UpdateLanguageStatus();
+    }
+
+    /// <summary>
+    /// 初始化 SDK 列表容器布局。
+    /// 清理 WinUI ListViewItem 默认内边距，让表头 Grid 与数据行 Grid 共享同一可用宽度。
+    /// </summary>
+    private void InitializeSdkListViewLayout()
+    {
+        var itemContainerStyle = new Style(typeof(ListViewItem));
+        itemContainerStyle.Setters.Add(new Setter(Control.HorizontalContentAlignmentProperty, HorizontalAlignment.Stretch));
+        itemContainerStyle.Setters.Add(new Setter(Control.PaddingProperty, new Thickness(0)));
+        itemContainerStyle.Setters.Add(new Setter(FrameworkElement.MarginProperty, new Thickness(0)));
+        itemContainerStyle.Setters.Add(new Setter(FrameworkElement.MinHeightProperty, 0d));
+
+        SdkVersionsListView.ItemContainerStyle = itemContainerStyle;
+    }
+
+    /// <summary>
+    /// 初始化 tubatools 风格自绘标题栏。
+    /// 保留系统最小化/最大化/关闭按钮，只扩展内容到标题栏并设置按钮颜色。
+    /// </summary>
+    private void InitializeCustomTitleBar()
+    {
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(TitleBarDragRegion);
+
+        AppWindow appWindow = GetAppWindow();
+        SetWindowIcon(appWindow);
+
+        AppWindowTitleBar titleBar = appWindow.TitleBar;
+        titleBar.ButtonBackgroundColor = Colors.Transparent;
+        titleBar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        titleBar.ButtonForegroundColor = Colors.Black;
+        titleBar.ButtonInactiveForegroundColor = Colors.Gray;
+        titleBar.ButtonHoverBackgroundColor = Colors.Gainsboro;
+        titleBar.ButtonPressedBackgroundColor = Colors.LightGray;
+    }
+
+    /// <summary>
+    /// 初始化导航控件缓存。
+    /// 将频繁访问的按钮、指示条和文本缓存下来，避免每次切换模块时临时创建数组。
+    /// </summary>
+    private void InitializeNavigationCaches()
+    {
+        navigationButtons = new[]
+        {
+            HomeNavButton,
+            SdkNavButton,
+            JavaNavButton,
+            MavenNavButton,
+            NodeNavButton,
+            GoNavButton,
+            ProfilesNavButton,
+            DoctorNavButton,
+            LogsNavButton,
+            SettingsNavButton,
+        };
+
+        navigationIndicators = new[]
+        {
+            HomeIndicator,
+            SdkIndicator,
+            JavaIndicator,
+            MavenIndicator,
+            NodeIndicator,
+            GoIndicator,
+            ProfilesIndicator,
+            DoctorIndicator,
+            LogsIndicator,
+            SettingsIndicator,
+        };
+
+        navigationTextBlocks = new[]
+        {
+            HomeNavText,
+            SdkNavText,
+            JavaNavText,
+            MavenNavText,
+            NodeNavText,
+            GoNavText,
+            ProfilesNavText,
+            DoctorNavText,
+            LogsNavText,
+            SettingsNavText,
+        };
+
+        selectedNavigationBrush = (Brush)Application.Current.Resources["DevSwitchNavSelectedBrush"];
+        navHoverBrush = (Brush)Application.Current.Resources["DevSwitchNavHoverBrush"];
+        navPressedBrush = (Brush)Application.Current.Resources["DevSwitchNavPressedBrush"];
+        navSelectedHoverBrush = (Brush)Application.Current.Resources["DevSwitchNavSelectedHoverBrush"];
+        navHoverBorderBrush = (Brush)Application.Current.Resources["DevSwitchNavHoverBorderBrush"];
+        navSelectedBorderBrush = (Brush)Application.Current.Resources["DevSwitchNavSelectedBorderBrush"];
+        navIconBrush = (Brush)Application.Current.Resources["DevSwitchNavIconBrush"];
+        navSelectedTextBrush = (Brush)Application.Current.Resources["DevSwitchAccentTextBrush"];
+
+        InitializeNavigationTooltips();
+    }
+
+    /// <summary>
+    /// 初始化侧栏按钮的 Fluent hover/pressed 资源。
+    /// 使用按钮本地资源覆盖默认模板读取的画刷，不污染 App.xaml，也不需要自定义 ControlTemplate。
+    /// </summary>
+    private void InitializeNavigationVisuals()
+    {
+        foreach (Button button in navigationButtons)
+        {
+            ApplyNavigationButtonVisual(button, isSelected: false);
+        }
+    }
+
+    /// <summary>
+    /// 为导航项设置稳定 tooltip。
+    /// 折叠态只显示图标时，tooltip 是保持可访问性和可理解性的关键反馈。
+    /// </summary>
+    private void InitializeNavigationTooltips()
+    {
+        ToolTipService.SetToolTip(HomeNavButton, "首页");
+        ToolTipService.SetToolTip(SdkNavButton, "SDK 管理");
+        ToolTipService.SetToolTip(JavaNavButton, "Java");
+        ToolTipService.SetToolTip(MavenNavButton, "Maven");
+        ToolTipService.SetToolTip(NodeNavButton, "Node.js");
+        ToolTipService.SetToolTip(GoNavButton, "Go");
+        ToolTipService.SetToolTip(ProfilesNavButton, "配置档案");
+        ToolTipService.SetToolTip(DoctorNavButton, "环境诊断");
+        ToolTipService.SetToolTip(LogsNavButton, "日志");
+        ToolTipService.SetToolTip(SettingsNavButton, "设置");
+    }
+
+    /// <summary>
+    /// 切换左侧导航栏展开/折叠状态。
+    /// 折叠宽度使用 64px，并把按钮 Padding 归零，避免图标被裁剪成半截。
+    /// </summary>
+    private void OnToggleSidebarClick(object sender, RoutedEventArgs e)
+    {
+        isSidebarExpanded = !isSidebarExpanded;
+        SidebarColumn.Width = new GridLength(isSidebarExpanded ? 280 : 64);
+
+        Visibility expandedVisibility = isSidebarExpanded ? Visibility.Visible : Visibility.Collapsed;
+        NavMainHeaderText.Visibility = expandedVisibility;
+        // 子菜单可见性：折叠侧栏时强制隐藏；展开侧栏时恢复到用户的子菜单展开状态。
+        SdkChildrenPanel.Visibility = isSidebarExpanded && isSdkSubmenuExpanded ? Visibility.Visible : Visibility.Collapsed;
+        // 折叠态隐藏父项箭头（只剩图标），展开态恢复。
+        SdkChevronIcon.Visibility = expandedVisibility;
+
+        foreach (TextBlock textBlock in navigationTextBlocks)
+        {
+            textBlock.Visibility = expandedVisibility;
+        }
+
+        if (!isSidebarExpanded && IsSdkChildNavigationButton(currentNavigationButton))
+        {
+            SetNavigationSelection(SdkNavButton, SdkIndicator);
+        }
+
+        ToolTipService.SetToolTip(TitlePaneToggleButton, isSidebarExpanded ? "折叠导航" : "展开导航");
+    }
+
+    /// <summary>
+    /// 判断当前选中项是否属于 SDK 子导航。
+    /// 折叠侧栏时子导航整体隐藏，需要把父级 SDK 管理项作为可见选中态。
+    /// </summary>
+    private bool IsSdkChildNavigationButton(Button? button)
+    {
+        return button == JavaNavButton
+            || button == MavenNavButton
+            || button == NodeNavButton
+            || button == GoNavButton;
+    }
+
+    /// <summary>
+    /// 显示首页。
+    /// </summary>
+    private void OnHomeNavClick(object sender, RoutedEventArgs e)
+    {
+        SetNavigationSelection(HomeNavButton, HomeIndicator);
+        ShowHomeContent();
+    }
+
+    /// <summary>
+    /// SDK 管理主入口：显示 SDK 总览页，并切换子菜单（Java/Maven/...）的展开/收起状态。
+    /// 父项本身是「总览 + 可折叠分组头」，不再直接等同于 Java 页。
+    /// </summary>
+    private void OnSdkNavClick(object sender, RoutedEventArgs e)
+    {
+        // 切换子菜单展开状态（仅在侧栏展开态下有视觉意义；折叠态由 toggle 控制）。
+        isSdkSubmenuExpanded = !isSdkSubmenuExpanded;
+        UpdateSdkSubmenuVisual();
+
+        SetNavigationSelection(SdkNavButton, SdkIndicator);
+        ShowSdkOverviewContent();
+    }
+
+    /// <summary>
+    /// 总览页分类卡片点击：进入对应分类管理页，并确保子菜单展开。
+    /// </summary>
+    private void OnSdkOverviewCardClick(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.Tag is not string category)
+        {
+            return;
+        }
+
+        // 进入具体分类前确保子菜单展开，保持导航上下文清晰。
+        if (!isSdkSubmenuExpanded)
+        {
+            isSdkSubmenuExpanded = true;
+            UpdateSdkSubmenuVisual();
+        }
+
+        switch (category)
+        {
+            case "Java":
+                ShowSdkCategory("Java", JavaNavButton, JavaIndicator);
+                break;
+            case "Maven":
+                ShowSdkCategory("Maven", MavenNavButton, MavenIndicator);
+                break;
+            case "Node.js":
+                ShowSdkCategory("Node.js", NodeNavButton, NodeIndicator);
+                break;
+            case "Go":
+                ShowSdkCategory("Go", GoNavButton, GoIndicator);
+                break;
+        }
+    }
+
+    private void OnJavaNavClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Java", JavaNavButton, JavaIndicator);
+    }
+
+    private void OnMavenNavClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Maven", MavenNavButton, MavenIndicator);
+    }
+
+    private void OnNodeNavClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Node.js", NodeNavButton, NodeIndicator);
+    }
+
+    private void OnGoNavClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Go", GoNavButton, GoIndicator);
+    }
+
+    private void OnProfilesNavClick(object sender, RoutedEventArgs e)
+    {
+        SetNavigationSelection(ProfilesNavButton, ProfilesIndicator);
+        ShowProfilesContent();
+    }
+
+    private async void OnDoctorNavClick(object sender, RoutedEventArgs e)
+    {
+        SetNavigationSelection(DoctorNavButton, DoctorIndicator);
+        ShowDoctorContent();
+
+        // 进入诊断页自动运行一次诊断；已有结果时仍刷新以反映最新状态。
+        await RunDoctorAsync();
+    }
+
+    private void OnLogsNavClick(object sender, RoutedEventArgs e)
+    {
+        SetNavigationSelection(LogsNavButton, LogsIndicator);
+        ShowLogsContent();
+    }
+
+    private void OnSettingsNavClick(object sender, RoutedEventArgs e)
+    {
+        SetNavigationSelection(SettingsNavButton, SettingsIndicator);
+        ShowSettingsContent();
+    }
+
+    /// <summary>
+    /// 首页快捷入口：跳转到 Java SDK 管理演示页。
+    /// </summary>
+    private void OnShowJavaSdkClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Java", JavaNavButton, JavaIndicator);
+    }
+
+    /// <summary>
+    /// 根布局加载后异步读取真实 sdks.json 并把设置同步到设置页，避免构造函数阻塞 UI 首帧。
+    /// WinUI 3 的 Window 不暴露 Loaded 事件，这里改用根 Grid 的 Loaded。
+    /// </summary>
+    private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
+    {
+        await RefreshSdkCatalogAsync();
+        await LoadSettingsIntoUiAsync();
+        // 启动时检测工具目录是否被移动（DEVSWITCH_HOME 漂移），漂移则自动校正环境变量。
+        await CorrectEnvironmentDriftAsync();
+    }
+
+    /// <summary>
+    /// 窗口关闭时取消仍未完成的 catalog 读取或导入刷新。
+    /// </summary>
+    private void OnMainWindowClosed(object sender, WindowEventArgs args)
+    {
+        // 退订语言变更事件，避免单例长期持有已关闭窗口的引用导致泄漏。
+        DevSwitch.App.Localization.LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+        windowLifetime.Cancel();
+        windowLifetime.Dispose();
+    }
+
+    /// <summary>
+    /// 刷新按钮：重新读取真实 sdks.json。
+    /// </summary>
+    private async void OnRefreshSdkCatalogClick(object sender, RoutedEventArgs e)
+    {
+        await RefreshSdkCatalogAsync();
+    }
+
+    /// <summary>
+    /// “添加本地 SDK”按钮：选择目录、导入 catalog、刷新当前列表。
+    /// </summary>
+    private async void OnAddLocalSdkClick(object sender, RoutedEventArgs e)
+    {
+        string? selectedPath = await PickSdkFolderAsync();
+        if (string.IsNullOrWhiteSpace(selectedPath))
+        {
+            return;
+        }
+
+        await ImportSelectedLocalSdkAsync(selectedPath);
+    }
+
+    /// <summary>
+    /// 通过 WinUI FolderPicker 选择 SDK 根目录。
+    /// Desktop WinUI 必须绑定窗口句柄，否则 picker 可能无法显示。
+    /// </summary>
+    private async Task<string?> PickSdkFolderAsync()
+    {
+        var picker = new FolderPicker();
+        picker.FileTypeFilter.Add("*");
+
+        nint hwnd = WindowNative.GetWindowHandle(this);
+        InitializeWithWindow.Initialize(picker, hwnd);
+
+        StorageFolder? folder = await picker.PickSingleFolderAsync();
+        return folder?.Path;
+    }
+
+    /// <summary>
+    /// 调用 Core 导入服务登记本地 SDK，并在成功后刷新 GUI 列表。
+    /// </summary>
+    /// <param name="selectedPath">用户选择的 SDK 目录。</param>
+    private async Task ImportSelectedLocalSdkAsync(string selectedPath)
+    {
+        SetImportBusy(true);
+
+        try
+        {
+            var result = await localSdkImportService.ImportLocalAsync(selectedPath);
+            if (result.Success && result.Record is not null)
+            {
+                ShowImportedSdkCategory(result.Record.Type);
+                await RefreshSdkCatalogAsync();
+            }
+
+            await ShowImportResultDialogAsync(result);
+        }
+        catch (Exception ex)
+        {
+            await ShowSimpleDialogAsync("导入失败", ex.Message);
+        }
+        finally
+        {
+            SetImportBusy(false);
+        }
+    }
+
+    /// <summary>
+    /// 按导入结果切换到对应 SDK 分类，让用户立刻看到新增记录。
+    /// </summary>
+    private void ShowImportedSdkCategory(SdkType type)
+    {
+        switch (type)
+        {
+            case SdkType.Java:
+                ShowSdkCategory("Java", JavaNavButton, JavaIndicator);
+                break;
+            case SdkType.Maven:
+                ShowSdkCategory("Maven", MavenNavButton, MavenIndicator);
+                break;
+            case SdkType.Node:
+                ShowSdkCategory("Node.js", NodeNavButton, NodeIndicator);
+                break;
+            case SdkType.Go:
+                ShowSdkCategory("Go", GoNavButton, GoIndicator);
+                break;
+        }
+    }
+
+    /// <summary>
+    /// 统一刷新 ViewModel，处理窗口关闭导致的取消场景。
+    /// </summary>
+    private async Task RefreshSdkCatalogAsync()
+    {
+        try
+        {
+            await viewModel.RefreshAsync(windowLifetime.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            // NOTE: 关闭窗口时取消刷新无需反馈。
+        }
+    }
+
+    /// <summary>
+    /// 设置导入按钮 busy 状态，防止用户重复打开 picker 或重复写入 sdks.json。
+    /// </summary>
+    private void SetImportBusy(bool isBusy)
+    {
+        AddLocalSdkButton.IsEnabled = !isBusy;
+        EmptyAddLocalSdkButton.IsEnabled = !isBusy;
+    }
+
+    /// <summary>
+    /// 展示本地 SDK 导入结果。
+    /// </summary>
+    private Task ShowImportResultDialogAsync(LocalSdkImportResult result)
+    {
+        string title = result.Success ? "导入成功" : "导入失败";
+        string content = result.Success && result.Record is not null
+            ? $"已导入 {result.Record.Name}。\n路径：{result.Record.Path}"
+            : result.Message;
+
+        return ShowSimpleDialogAsync(title, content);
+    }
+
+    /// <summary>
+    /// 显示简单反馈弹窗。
+    /// </summary>
+    private async Task ShowSimpleDialogAsync(string title, string content)
+    {
+        if (RootGrid.XamlRoot is null)
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = title,
+            Content = content,
+            CloseButtonText = "知道了",
+            XamlRoot = RootGrid.XamlRoot,
+        };
+
+        await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// 所有尚未接入真实业务按钮的占位反馈。
+    /// </summary>
+    private async void OnPlaceholderActionClick(object sender, RoutedEventArgs e)
+    {
+        if (RootGrid.XamlRoot is null)
+        {
+            return;
+        }
+
+        var dialog = new ContentDialog
+        {
+            Title = "功能占位",
+            Content = "当前是手工测试空壳，真实功能将在后续纵切接入。",
+            CloseButtonText = "知道了",
+            XamlRoot = RootGrid.XamlRoot,
+        };
+
+        await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// 显示指定 SDK 分类并更新 Gallery 风格导航选中态。
+    /// 重复点击当前分类时直接短路，避免不必要的绑定刷新和布局更新。
+    /// </summary>
+    /// <param name="category">SDK 分类名称。</param>
+    /// <param name="selectedButton">当前选中的导航按钮。</param>
+    /// <param name="selectedIndicator">当前选中的左侧 Accent 条。</param>
+    private void ShowSdkCategory(string category, Button selectedButton, Border selectedIndicator)
+    {
+        if (currentNavigationButton == selectedButton
+            && currentContent == SdkContent
+            && viewModel.SelectedCategory == category)
+        {
+            return;
+        }
+
+        viewModel.SelectCategory(category);
+        SetNavigationSelection(selectedButton, selectedIndicator);
+        ShowSdkContent();
+    }
+
+    /// <summary>
+    /// 设置左侧导航选中态。
+    /// 仅更新旧选中项和新选中项，避免每次模块切换都遍历全部按钮和指示条。
+    /// </summary>
+    private void SetNavigationSelection(Button selectedButton, Border selectedIndicator)
+    {
+        if (currentNavigationButton == selectedButton && currentNavigationIndicator == selectedIndicator)
+        {
+            return;
+        }
+
+        if (currentNavigationButton is not null)
+        {
+            ApplyNavigationButtonVisual(currentNavigationButton, isSelected: false);
+        }
+
+        if (currentNavigationIndicator is not null)
+        {
+            currentNavigationIndicator.Visibility = Visibility.Collapsed;
+        }
+
+        ApplyNavigationButtonVisual(selectedButton, isSelected: true);
+        selectedIndicator.Visibility = Visibility.Visible;
+
+        currentNavigationButton = selectedButton;
+        currentNavigationIndicator = selectedIndicator;
+    }
+
+    /// <summary>
+    /// 应用侧栏按钮的正常/选中视觉状态，并覆盖本地 hover/pressed 资源。
+    /// </summary>
+    /// <param name="button">需要更新视觉的导航按钮。</param>
+    /// <param name="isSelected">是否为当前选中项。</param>
+    private void ApplyNavigationButtonVisual(Button button, bool isSelected)
+    {
+        button.Background = isSelected && selectedNavigationBrush is not null ? selectedNavigationBrush : navTransparentBrush;
+        button.BorderBrush = isSelected && navSelectedBorderBrush is not null ? navSelectedBorderBrush : navTransparentBrush;
+        button.BorderThickness = new Thickness(1);
+        button.CornerRadius = new CornerRadius(8);
+
+        button.Resources["ButtonBackgroundPointerOver"] = isSelected ? navSelectedHoverBrush : navHoverBrush;
+        button.Resources["ButtonBackgroundPressed"] = isSelected ? navSelectedHoverBrush : navPressedBrush;
+        button.Resources["ButtonBorderBrushPointerOver"] = isSelected ? navSelectedBorderBrush : navHoverBorderBrush;
+        button.Resources["ButtonBorderBrushPressed"] = isSelected ? navSelectedBorderBrush : navHoverBorderBrush;
+
+        Brush? foregroundBrush = isSelected ? navSelectedTextBrush : navIconBrush;
+        foreach (TextBlock textBlock in FindDescendants<TextBlock>(button))
+        {
+            textBlock.Foreground = foregroundBrush;
+            textBlock.FontWeight = isSelected ? Microsoft.UI.Text.FontWeights.SemiBold : Microsoft.UI.Text.FontWeights.Normal;
+        }
+
+        foreach (FontIcon icon in FindDescendants<FontIcon>(button))
+        {
+            icon.Foreground = foregroundBrush;
+        }
+    }
+
+    /// <summary>
+    /// 查找某个导航按钮内部指定类型的后代元素。
+    /// 该方法仅服务侧栏视觉状态更新，避免在 XAML 中引入高风险复杂 ControlTemplate。
+    /// </summary>
+    private static IEnumerable<T> FindDescendants<T>(DependencyObject root)
+        where T : DependencyObject
+    {
+        int childCount = VisualTreeHelper.GetChildrenCount(root);
+        for (int index = 0; index < childCount; index++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(root, index);
+            if (child is T typedChild)
+            {
+                yield return typedChild;
+            }
+
+            foreach (T descendant in FindDescendants<T>(child))
+            {
+                yield return descendant;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 设置右侧当前显示内容。
+    /// 只隐藏旧内容并显示新内容，避免每次切换都重设全部内容区 Visibility。
+    /// </summary>
+    /// <param name="activeContent">需要显示的内容控件。</param>
+    private void SetActiveContent(FrameworkElement activeContent)
+    {
+        if (currentContent == activeContent)
+        {
+            return;
+        }
+
+        if (currentContent is not null)
+        {
+            currentContent.Visibility = Visibility.Collapsed;
+        }
+
+        activeContent.Visibility = Visibility.Visible;
+        currentContent = activeContent;
+    }
+
+    /// <summary>
+    /// 显示首页。
+    /// </summary>
+    private void ShowHomeContent()
+    {
+        SetActiveContent(HomeContent);
+    }
+
+    /// <summary>
+    /// 显示 SDK 管理页面。
+    /// </summary>
+    private void ShowSdkContent()
+    {
+        SetActiveContent(SdkContent);
+    }
+
+    /// <summary>
+    /// 显示 SDK 管理总览页（四类卡片入口），并按当前 catalog 刷新各分类汇总。
+    /// </summary>
+    private void ShowSdkOverviewContent()
+    {
+        RefreshSdkOverviewCards();
+        SetActiveContent(SdkOverviewContent);
+    }
+
+    /// <summary>
+    /// 按当前 ViewModel 行重算 SDK 总览卡片（数量 + 活跃版本）。
+    /// 复用 Core 的 SdkCategorySummaryBuilder 纯逻辑，UI 只做投影与展示。
+    /// </summary>
+    private void RefreshSdkOverviewCards()
+    {
+        var inputs = viewModel.Versions
+            .Select(r => new DevSwitch.Core.SdkSummaryInput(r.Category, r.Name, r.Status))
+            .ToList();
+        var cards = DevSwitch.Core.SdkCategorySummaryBuilder.Build(inputs);
+
+        sdkOverviewSummaries.Clear();
+        foreach (var card in cards)
+        {
+            sdkOverviewSummaries.Add(card);
+        }
+    }
+
+    /// <summary>
+    /// 更新 SDK 子菜单展开/收起视觉：子项面板可见性 + 父项箭头朝向。
+    /// 仅在侧栏展开态下生效；折叠态由 OnToggleSidebarClick 统一隐藏子项。
+    /// </summary>
+    private void UpdateSdkSubmenuVisual()
+    {
+        if (!isSidebarExpanded)
+        {
+            return;
+        }
+
+        SdkChildrenPanel.Visibility = isSdkSubmenuExpanded ? Visibility.Visible : Visibility.Collapsed;
+        // E70D=向下箭头（展开）、E70E=向上箭头（收起）。
+        SdkChevronIcon.Glyph = isSdkSubmenuExpanded ? "\uE70D" : "\uE70E";
+    }
+
+    /// <summary>
+    /// 显示设置页。
+    /// 检查更新与反馈入口均收纳在该页面中。
+    /// </summary>
+    private void ShowSettingsContent()
+    {
+        SetActiveContent(SettingsContent);
+    }
+
+    // 配置档案视图懒初始化标记：仅首次进入时注入 dataRoot 并加载，避免重复 IO。
+    private bool isProfilesInitialized;
+
+    /// <summary>
+    /// 显示配置档案页；首次进入时注入数据根并加载列表。
+    /// </summary>
+    private void ShowProfilesContent()
+    {
+        if (!isProfilesInitialized)
+        {
+            ProfilesContent.Initialize(dataRoot);
+            isProfilesInitialized = true;
+        }
+
+        SetActiveContent(ProfilesContent);
+    }
+
+    /// <summary>
+    /// 显示日志页；每次进入都重新加载，保证看到最新记录。
+    /// </summary>
+    private void ShowLogsContent()
+    {
+        LogsContent.Initialize(dataRoot);
+        SetActiveContent(LogsContent);
+    }
+
+    /// <summary>
+    /// 显示暂未实现页面的占位内容。
+    /// </summary>
+    private void ShowPlaceholderContent(string title, string description)
+    {
+        PlaceholderTitleText.Text = title;
+        PlaceholderDescriptionText.Text = description;
+        SetActiveContent(PlaceholderContent);
+    }
+
+    /// <summary>
+    /// 设置运行时窗口图标。
+    /// ApplicationIcon 负责 exe 文件图标，AppWindow.SetIcon 负责任务栏和 Alt-Tab 窗口图标。
+    /// </summary>
+    /// <param name="appWindow">当前窗口对应的 AppWindow。</param>
+    private static void SetWindowIcon(AppWindow appWindow)
+    {
+        string iconPath = Path.Combine(AppContext.BaseDirectory, "princess.ico");
+        if (File.Exists(iconPath))
+        {
+            appWindow.SetIcon(iconPath);
+        }
+    }
+
+    /// <summary>
+    /// 获取当前窗口对应的 AppWindow。
+    /// </summary>
+    private AppWindow GetAppWindow()
+    {
+        nint windowHandle = WindowNative.GetWindowHandle(this);
+        WindowId windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
+        return AppWindow.GetFromWindowId(windowId);
+    }
+
+    /// <summary>
+    /// 通过 Windows App SDK 的 AppWindow 设置桌面窗口尺寸。
+    /// 如果窗口句柄尚不可用，则保持系统默认尺寸，避免影响空壳启动。
+    /// </summary>
+    /// <param name="width">目标宽度，单位为有效像素。</param>
+    /// <param name="height">目标高度，单位为有效像素。</param>
+    private void ResizeWindow(int width, int height)
+    {
+        AppWindow appWindow = GetAppWindow();
+        appWindow.Resize(new SizeInt32(width, height));
+    }
+}

@@ -1,0 +1,49 @@
+# ===== .NET / Visual Studio 构建产物 =====
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+.vs/
+
+# ===== DevSwitch 打包产物（体积大，不入库；由打包脚本生成）=====
+artifacts/package/
+artifacts/bin/
+
+# ===== C++ 编译产物 =====
+*.o
+*.obj
+*.exe
+*.dll
+*.pdb
+*.ilk
+
+# ===== 运行时 / 用户数据（绝不入库）=====
+data/
+logs/
+*.log
+
+# ===== NuGet =====
+*.nupkg
+packages/
+.nuget/
+
+# ===== IDE / 编辑器 =====
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ===== 测试结果 =====
+TestResults/
+[Tt]est[Rr]esult*/
+*.coverage
+*.trx
+
+# ===== 本地构建临时环境（dotnet 缓存等，不入库）=====
+.tmp/

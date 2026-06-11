@@ -1,0 +1,49 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- DevSwitch 手工测试空壳：仅创建可启动 WinUI 3 桌面入口，不接入假数据或业务 UI。 -->
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <RootNamespace>DevSwitch.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- 使用用户提供的 princess.ico 作为非打包 exe 的应用图标。 -->
+    <ApplicationIcon>princess.ico</ApplicationIcon>
+    <UseWinUI>true</UseWinUI>
+    <!-- Windows App SDK 1.5 仍引用 win10-* RID；.NET 新版 SDK 默认 RID 图不识别，需启用完整 RID 图。 -->
+    <UseRidGraph>true</UseRidGraph>
+    <!-- Windows App SDK 1.5 的 XAML/PRI 构建仍使用 win10-* RID；手工测试空壳只构建 x64。 -->
+    <RuntimeIdentifier>win10-x64</RuntimeIdentifier>
+    <RuntimeIdentifiers>win10-x64</RuntimeIdentifiers>
+    <Platform>x64</Platform>
+    <Platforms>x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <!-- 非打包模式便于先形成最小可点击空壳；后续如需 MSIX 再补 Package.appxmanifest。 -->
+    <WindowsPackageType>None</WindowsPackageType>
+    <!-- WinUI 3 非打包 exe 双击启动依赖 Windows App SDK runtime；自包含部署可避免目标机 runtime/注册状态不一致导致 0xC000027B。 -->
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Windows App SDK 提供 WinUI 3 桌面运行时与 XAML 编译支持。 -->
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.5.240802000" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- AppWindow.SetIcon 需要运行目录中存在实体 ico 文件，用于任务栏/Alt-Tab 图标。 -->
+    <None Update="princess.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- 发布态切换 SDK 必须把 helper 放在 App 同目录；打包脚本会先构建 artifacts\bin\DevSwitch.Helper.exe。 -->
+    <None Include="..\..\artifacts\bin\DevSwitch.Helper.exe" Link="DevSwitch.Helper.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\bin\DevSwitch.Helper.exe')" />
+    <!-- shim 转发器随包：rebuildShims 会把它复制成 shims\&lt;cmd&gt;.exe。 -->
+    <None Include="..\..\artifacts\bin\DevSwitch.Shim.exe" Link="DevSwitch.Shim.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\bin\DevSwitch.Shim.exe')" />
+    <!-- updater 自更新器随包：自更新时覆盖安装目录并重启。 -->
+    <None Include="..\..\artifacts\bin\DevSwitch.Updater.exe" Link="DevSwitch.Updater.exe" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" Condition="Exists('..\..\artifacts\bin\DevSwitch.Updater.exe')" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- 引用 Core（领域服务）、Sources（版本源）、Downloader（下载器），供真实业务 UI 接线使用。 -->
+    <ProjectReference Include="..\DevSwitch.Core\DevSwitch.Core.csproj" />
+    <ProjectReference Include="..\DevSwitch.Sources\DevSwitch.Sources.csproj" />
+    <ProjectReference Include="..\DevSwitch.Downloader\DevSwitch.Downloader.csproj" />
+  </ItemGroup>
+</Project>

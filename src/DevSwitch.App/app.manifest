@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <!-- DevSwitch 非打包 WinUI 3 手工测试空壳清单：仅声明桌面进程基础能力。 -->
+  <assemblyIdentity version="1.0.0.0" name="DevSwitch.App"/>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
+    <security>
+      <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
+        <!-- 以普通用户权限运行：稳态切换只换 current junction，不写系统 PATH，无需提权（无 UAC 弹窗）。
+             仅当首次/缺失需要把 shims 目录写入系统 PATH 时，App 才通过 ShellExecute "runas" 按需提权启动 helper CLI。 -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <!-- 启用 Per-Monitor DPI 感知，保证 WinUI 3 窗口在常见显示器上缩放合理。 -->
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+</assembly>

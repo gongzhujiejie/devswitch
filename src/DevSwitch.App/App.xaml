@@ -1,0 +1,46 @@
+<Application
+    x:Class="DevSwitch.App.App"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls">
+    <!-- DevSwitch 应用级资源：必须先合并 WinUI 控件主题资源（XamlControlsResources），
+         否则 ProgressRing / MenuFlyout / ContentDialog / ComboBox 等控件的默认样式链
+         会引用 TabViewButtonBackground 等主题资源键，运行时 XAML 解析失败导致启动崩溃。
+         自定义 SolidColorBrush 放在 MergedDictionaries 之后，确保不被覆盖。 -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <controls:XamlControlsResources />
+            </ResourceDictionary.MergedDictionaries>
+
+            <SolidColorBrush x:Key="DevSwitchSurfaceBrush" Color="#F5F7FB" />
+            <SolidColorBrush x:Key="DevSwitchCardBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="DevSwitchSubtleBrush" Color="#F3F6FB" />
+            <SolidColorBrush x:Key="DevSwitchBorderBrush" Color="#E3E8F0" />
+            <SolidColorBrush x:Key="DevSwitchPrimaryTextBrush" Color="#111827" />
+            <SolidColorBrush x:Key="DevSwitchSecondaryTextBrush" Color="#4B5563" />
+            <SolidColorBrush x:Key="DevSwitchMutedTextBrush" Color="#6B7280" />
+            <SolidColorBrush x:Key="DevSwitchAccentBrush" Color="#2563EB" />
+            <SolidColorBrush x:Key="DevSwitchAccentSubtleBrush" Color="#EFF6FF" />
+            <SolidColorBrush x:Key="DevSwitchAccentTextBrush" Color="#1D4ED8" />
+            <SolidColorBrush x:Key="DevSwitchOnAccentBrush" Color="#FFFFFF" />
+            <SolidColorBrush x:Key="DevSwitchShellBrush" Color="#F3F7FC" />
+            <SolidColorBrush x:Key="DevSwitchNavHoverBrush" Color="#E8EEF7" />
+            <SolidColorBrush x:Key="DevSwitchNavPressedBrush" Color="#DDE7F5" />
+            <SolidColorBrush x:Key="DevSwitchNavSelectedBrush" Color="#EFF6FF" />
+            <SolidColorBrush x:Key="DevSwitchNavSelectedHoverBrush" Color="#DDEBFF" />
+            <SolidColorBrush x:Key="DevSwitchNavHoverBorderBrush" Color="#D7E3F6" />
+            <SolidColorBrush x:Key="DevSwitchNavSelectedBorderBrush" Color="#BFDBFE" />
+            <SolidColorBrush x:Key="DevSwitchNavIconBrush" Color="#4B5563" />
+            <SolidColorBrush x:Key="DevSwitchTableHeaderBrush" Color="#F4F7FB" />
+            <SolidColorBrush x:Key="DevSwitchInfoBackgroundBrush" Color="#EFF6FF" />
+            <SolidColorBrush x:Key="DevSwitchInfoBorderBrush" Color="#BFDBFE" />
+            <SolidColorBrush x:Key="DevSwitchSuccessSubtleBrush" Color="#ECFDF3" />
+            <SolidColorBrush x:Key="DevSwitchSuccessTextBrush" Color="#067647" />
+            <SolidColorBrush x:Key="DevSwitchWarningSubtleBrush" Color="#FFFAEB" />
+            <SolidColorBrush x:Key="DevSwitchWarningTextBrush" Color="#B54708" />
+            <SolidColorBrush x:Key="DevSwitchDangerSubtleBrush" Color="#FEF3F2" />
+            <SolidColorBrush x:Key="DevSwitchDangerTextBrush" Color="#B42318" />
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

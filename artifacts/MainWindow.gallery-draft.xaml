@@ -1,0 +1,550 @@
+<Window
+    x:Class="DevSwitch.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="DevSwitch">
+
+    <!-- DevSwitch Gallery 风格 Shell：使用 WinUI 原生 NavigationView，获得折叠侧栏、原生选中态和左下角 Settings。 -->
+    <Grid
+        x:Name="RootGrid"
+        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <NavigationView
+            x:Name="NavigationViewControl"
+            CompactPaneLength="48"
+            IsBackButtonVisible="Collapsed"
+            IsPaneToggleButtonVisible="True"
+            IsSettingsVisible="True"
+            OpenPaneLength="280"
+            PaneDisplayMode="Left"
+            SelectionChanged="OnNavigationViewSelectionChanged">
+
+            <NavigationView.PaneHeader>
+                <StackPanel Margin="12,8,12,12" Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Border
+                            Width="24"
+                            Height="24"
+                            Background="{StaticResource DevSwitchAccentSubtleBrush}"
+                            CornerRadius="5">
+                            <FontIcon
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="13"
+                                Foreground="{StaticResource DevSwitchAccentTextBrush}"
+                                Glyph="&#xE943;" />
+                        </Border>
+                        <StackPanel Spacing="0">
+                            <TextBlock
+                                FontSize="13"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource DevSwitchPrimaryTextBrush}"
+                                Text="DevSwitch" />
+                            <TextBlock
+                                FontSize="11"
+                                Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                                Text="v0.1 preview" />
+                        </StackPanel>
+                    </StackPanel>
+
+                    <AutoSuggestBox
+                        MinHeight="34"
+                        PlaceholderText="Search SDK, version, path..."
+                        QueryIcon="Find" />
+                </StackPanel>
+            </NavigationView.PaneHeader>
+
+            <NavigationView.MenuItems>
+                <NavigationViewItem
+                    x:Name="HomeNavItem"
+                    Content="Home"
+                    Tag="home">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE80F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItemHeader Content="Manage" />
+
+                <NavigationViewItem
+                    x:Name="SdkNavItem"
+                    Content="SDK management"
+                    IsExpanded="True"
+                    Tag="sdk-java">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8B7;" />
+                    </NavigationViewItem.Icon>
+                    <NavigationViewItem.MenuItems>
+                        <NavigationViewItem x:Name="JavaNavItem" Content="Java" Tag="sdk-java" />
+                        <NavigationViewItem Content="Maven" Tag="sdk-maven" />
+                        <NavigationViewItem Content="Node.js" Tag="sdk-node" />
+                        <NavigationViewItem Content="Go" Tag="sdk-go" />
+                    </NavigationViewItem.MenuItems>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Profiles" Tag="profiles">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE77B;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Doctor" Tag="doctor">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE90F;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+
+                <NavigationViewItem Content="Logs" Tag="logs">
+                    <NavigationViewItem.Icon>
+                        <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE8A5;" />
+                    </NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
+
+            <Grid Background="{StaticResource DevSwitchCardBrush}">
+                <!-- Home：类似 WinUI Gallery 的 hero + 横向入口 + 最近项。 -->
+                <ScrollViewer
+                    x:Name="HomeContent"
+                    Padding="0"
+                    Visibility="Visible">
+                    <StackPanel Padding="36,28,36,44" Spacing="28">
+                        <Grid Height="292">
+                            <Grid.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#EAF3FF" Offset="0" />
+                                    <GradientStop Color="#F7FAFF" Offset="0.48" />
+                                    <GradientStop Color="#EEF2F7" Offset="1" />
+                                </LinearGradientBrush>
+                            </Grid.Background>
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="420" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel
+                                Margin="36,36,0,0"
+                                MaxWidth="560"
+                                Spacing="8">
+                                <TextBlock
+                                    FontSize="16"
+                                    Foreground="{StaticResource DevSwitchSecondaryTextBrush}"
+                                    Text="Windows App SDK · Dev environment switcher" />
+                                <TextBlock
+                                    FontSize="38"
+                                    FontWeight="SemiBold"
+                                    Foreground="{StaticResource DevSwitchPrimaryTextBrush}"
+                                    Text="DevSwitch" />
+                                <TextBlock
+                                    FontSize="15"
+                                    Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                                    Text="统一管理 JDK、Maven、Node.js、Go 等本地开发运行时。快速导入、检查路径，并安全切换环境。"
+                                    TextWrapping="Wrap" />
+                                <StackPanel
+                                    Margin="0,18,0,0"
+                                    Orientation="Horizontal"
+                                    Spacing="10">
+                                    <Button
+                                        MinHeight="36"
+                                        Click="OnShowJavaSdkClick"
+                                        Content="Open SDK management"
+                                        Style="{StaticResource AccentButtonStyle}" />
+                                    <Button
+                                        MinHeight="36"
+                                        Click="OnPlaceholderActionClick"
+                                        Content="Run Doctor" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <!-- 自绘 Hero Illustration：模拟 Gallery 顶部图片，但不用外部素材，降低资源加载风险。 -->
+                            <Grid
+                                Grid.Column="1"
+                                Margin="0,26,34,24"
+                                HorizontalAlignment="Stretch">
+                                <Ellipse
+                                    Width="260"
+                                    Height="260"
+                                    HorizontalAlignment="Right"
+                                    Fill="#BBD7FF"
+                                    Opacity="0.42" />
+                                <Border
+                                    Width="310"
+                                    Height="174"
+                                    Margin="0,34,22,0"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Top"
+                                    Background="#FFFFFF"
+                                    BorderBrush="#D7E3F6"
+                                    BorderThickness="1"
+                                    CornerRadius="10">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="32" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Border
+                                            Background="#F3F6FB"
+                                            BorderBrush="#D7E3F6"
+                                            BorderThickness="0,0,0,1"
+                                            CornerRadius="10,10,0,0" />
+                                        <StackPanel
+                                            Margin="12,0,0,0"
+                                            Orientation="Horizontal"
+                                            Spacing="6"
+                                            VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Fill="#EF4444" />
+                                            <Ellipse Width="8" Height="8" Fill="#F59E0B" />
+                                            <Ellipse Width="8" Height="8" Fill="#22C55E" />
+                                        </StackPanel>
+                                        <Grid Grid.Row="1" Padding="18,14">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="96" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="8">
+                                                <Border Height="12" Background="#0F6CBD" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="18,0,0,0" Spacing="10">
+                                                <TextBlock FontWeight="SemiBold" Text="JAVA_HOME" />
+                                                <Border Height="10" Background="#E5E7EB" CornerRadius="3" />
+                                                <Border Height="10" Width="130" HorizontalAlignment="Left" Background="#E5E7EB" CornerRadius="3" />
+                                                <Border
+                                                    Width="86"
+                                                    Height="24"
+                                                    HorizontalAlignment="Left"
+                                                    Background="#EAF3FF"
+                                                    CornerRadius="12">
+                                                    <TextBlock
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center"
+                                                        FontSize="11"
+                                                        FontWeight="SemiBold"
+                                                        Foreground="#0F6CBD"
+                                                        Text="Active" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                                <Border
+                                    Width="178"
+                                    Height="74"
+                                    Margin="0,0,0,18"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Bottom"
+                                    Background="#FFFFFF"
+                                    BorderBrush="#D7E3F6"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Padding="14">
+                                    <StackPanel Spacing="5">
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Current runtime" />
+                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Temurin 17" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Quick actions" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button
+                                    Grid.Column="0"
+                                    MinHeight="96"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Click="OnShowJavaSdkClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE8B7;" />
+                                        <TextBlock FontWeight="SemiBold" Text="SDK management" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Import and switch SDKs" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    Grid.Column="1"
+                                    MinHeight="96"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Click="OnPlaceholderActionClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE90F;" />
+                                        <TextBlock FontWeight="SemiBold" Text="Doctor" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Check PATH and variables" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    Grid.Column="2"
+                                    MinHeight="96"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Click="OnPlaceholderActionClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE77B;" />
+                                        <TextBlock FontWeight="SemiBold" Text="Profiles" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Save workspace presets" />
+                                    </StackPanel>
+                                </Button>
+                                <Button
+                                    Grid.Column="3"
+                                    MinHeight="96"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Click="OnShowSettingsClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE713;" />
+                                        <TextBlock FontWeight="SemiBold" Text="Settings" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Updates and feedback" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Recently added samples" />
+                            <Grid RowSpacing="10">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="16">
+                                    <StackPanel Spacing="3">
+                                        <TextBlock FontWeight="SemiBold" Text="Temurin 17" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Managed Java runtime sample." />
+                                    </StackPanel>
+                                </Border>
+                                <Border Grid.Column="1" BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="16">
+                                    <StackPanel Spacing="3">
+                                        <TextBlock FontWeight="SemiBold" Text="Node.js 22 LTS" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Preview managed Node runtime." />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- SDK 管理页面：保留原有假数据列表，但放入 Gallery Shell 中。 -->
+                <Grid
+                    x:Name="SdkContent"
+                    Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Padding="36,26,36,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding SelectedCategory}" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="管理当前 SDK 类型的本地版本、来源路径和切换状态。" />
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Preview data" VerticalAlignment="Center" />
+                    </Grid>
+
+                    <Border Grid.Row="1" BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="0,1,0,1" Padding="28,8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Click="OnPlaceholderActionClick" Content="新增本地 SDK" Style="{StaticResource AccentButtonStyle}" />
+                                <Button Click="OnPlaceholderActionClick" Content="下载 SDK" />
+                                <Button Click="OnPlaceholderActionClick" Content="刷新" />
+                                <Button Click="OnPlaceholderActionClick" Content="Doctor" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                <ComboBox MinWidth="132" PlaceholderText="状态">
+                                    <ComboBoxItem Content="全部" />
+                                    <ComboBoxItem Content="使用中" />
+                                    <ComboBoxItem Content="可用" />
+                                    <ComboBoxItem Content="不可用" />
+                                </ComboBox>
+                                <Button Click="OnPlaceholderActionClick" Content="更多" />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="2" Background="{StaticResource DevSwitchAccentSubtleBrush}" BorderBrush="#BFDBFE" BorderThickness="0,0,0,1" Padding="36,10">
+                        <TextBlock Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="演示模式：当前操作仅弹出占位反馈，不会修改 PATH、JAVA_HOME、NODE_HOME 或其它真实环境变量。" TextWrapping="Wrap" />
+                    </Border>
+
+                    <Grid Grid.Row="3" Background="#F4F7FB" Padding="36,9">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="220" />
+                            <ColumnDefinition Width="120" />
+                            <ColumnDefinition Width="100" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="110" />
+                            <ColumnDefinition Width="120" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="名称" />
+                        <TextBlock Grid.Column="1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="版本" />
+                        <TextBlock Grid.Column="2" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="来源" />
+                        <TextBlock Grid.Column="3" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="路径" />
+                        <TextBlock Grid.Column="4" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="状态" />
+                        <TextBlock Grid.Column="5" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="操作" />
+                    </Grid>
+
+                    <Grid Grid.Row="4">
+                        <ListView ItemsSource="{Binding VisibleVersions}" SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid MinHeight="58" Padding="36,9">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="220" />
+                                            <ColumnDefinition Width="120" />
+                                            <ColumnDefinition Width="100" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="110" />
+                                            <ColumnDefinition Width="120" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="1" VerticalAlignment="Center">
+                                            <TextBlock FontWeight="SemiBold" Text="{Binding Name}" />
+                                            <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="SDK Runtime" />
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="2" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="{Binding Source}" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="3" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                        <Border Grid.Column="4" Background="{StaticResource DevSwitchAccentSubtleBrush}" CornerRadius="10" HorizontalAlignment="Left" Padding="8,3" VerticalAlignment="Center">
+                                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="{Binding Status}" />
+                                        </Border>
+                                        <Button Grid.Column="5" Click="OnPlaceholderActionClick" Content="{Binding Operation}" HorizontalAlignment="Left" IsEnabled="{Binding CanSwitch}" VerticalAlignment="Center" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+
+                        <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center" Visibility="{Binding EmptyStateVisibility}">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Text="暂无版本" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" HorizontalAlignment="Center" MaxWidth="360" Text="{Binding EmptyStateText}" TextAlignment="Center" TextWrapping="Wrap" />
+                            <Button Click="OnPlaceholderActionClick" Content="新增本地 SDK" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <!-- Settings：检查更新和反馈都收纳到设置页。 -->
+                <ScrollViewer
+                    x:Name="SettingsContent"
+                    Visibility="Collapsed">
+                    <StackPanel Padding="36,30,36,44" Spacing="26">
+                        <StackPanel Spacing="4">
+                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="Settings" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Manage DevSwitch behavior, updates and feedback." />
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="General" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="Start page" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Choose the page shown when DevSwitch opens." />
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="180" SelectedIndex="0">
+                                        <ComboBoxItem Content="Home" />
+                                        <ComboBoxItem Content="SDK management" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="Theme" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Current preview uses the system theme." />
+                                    </StackPanel>
+                                    <ComboBox Grid.Column="1" MinWidth="180" SelectedIndex="0">
+                                        <ComboBoxItem Content="Use system setting" />
+                                        <ComboBoxItem Content="Light" />
+                                        <ComboBoxItem Content="Dark" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Updates" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="DevSwitch Preview" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="v0.1 preview · Check whether a new build is available." />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Click="OnPlaceholderActionClick" Content="检查更新" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Feedback" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="Send feedback" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="Report a problem or suggest a feature." />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Click="OnPlaceholderActionClick" Content="反馈" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid
+                    x:Name="PlaceholderContent"
+                    Visibility="Collapsed">
+                    <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock
+                            x:Name="PlaceholderTitleText"
+                            FontSize="28"
+                            FontWeight="SemiBold"
+                            HorizontalAlignment="Center"
+                            Text="Coming soon" />
+                        <TextBlock
+                            x:Name="PlaceholderDescriptionText"
+                            Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                            HorizontalAlignment="Center"
+                            Text="This page is a preview placeholder."
+                            TextWrapping="Wrap" />
+                        <Button Click="OnPlaceholderActionClick" Content="了解更多" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </NavigationView>
+    </Grid>
+</Window>

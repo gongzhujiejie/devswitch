@@ -1,0 +1,1161 @@
+<Window
+    x:Class="DevSwitch.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:controls="using:Microsoft.UI.Xaml.Controls"
+    xmlns:views="using:DevSwitch.App.Views"
+    Title="DevSwitch">
+
+    <!-- 稳定版 Gallery/TubaTools 外观：自绘顶栏 + 手写可折叠侧栏，避免 NavigationView 在当前运行时触发 XAML parse failed。 -->
+    <Grid
+        x:Name="RootGrid"
+        Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="48" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- 自绘标题栏：接近 tubatools 顶栏，右侧预留系统最小化/最大化/关闭按钮区域。 -->
+        <Grid
+            x:Name="CustomTitleBar"
+            Grid.Row="0"
+            Background="{StaticResource DevSwitchShellBrush}"
+            Padding="8,0,144,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="40" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Button
+                x:Name="TitlePaneToggleButton"
+                AutomationProperties.Name="折叠导航"
+                Width="36"
+                Height="36"
+                Padding="0"
+                Background="Transparent"
+                BorderThickness="0"
+                Click="OnToggleSidebarClick">
+                <FontIcon
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    FontFamily="Segoe MDL2 Assets"
+                    FontSize="16"
+                    Glyph="&#xE700;" />
+            </Button>
+
+            <StackPanel
+                Grid.Column="1"
+                Orientation="Horizontal"
+                Spacing="8"
+                VerticalAlignment="Center">
+                <TextBlock
+                    FontSize="13"
+                    FontWeight="SemiBold"
+                    Foreground="{StaticResource DevSwitchPrimaryTextBrush}"
+                    Text="DevSwitch"
+                    VerticalAlignment="Center" />
+            </StackPanel>
+
+            <Border
+                x:Name="TitleBarDragRegion"
+                Grid.Column="2"
+                Background="Transparent" />
+
+            <TextBlock
+                Grid.Column="3"
+                Margin="12,0,0,0"
+                Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                Text="演示模式"
+                VerticalAlignment="Center" />
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition x:Name="SidebarColumn" Width="280" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- 左侧 Gallery 风格导航栏：折叠后 64px，图标完整居中。 -->
+            <Border
+                Grid.Column="0"
+                Background="{StaticResource DevSwitchShellBrush}"
+                BorderBrush="{StaticResource DevSwitchBorderBrush}"
+                BorderThickness="0,0,1,0">
+                <Grid Padding="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+
+                    <ScrollViewer Grid.Row="0">
+                        <StackPanel Spacing="2">
+                            <TextBlock
+                                x:Name="NavMainHeaderText"
+                                Margin="12,8,0,6"
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                                Text="导航" />
+
+                            <Button
+                                x:Name="HomeNavButton"
+                                MinHeight="40"
+                                Padding="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Click="OnHomeNavClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="HomeIndicator"
+                                        Width="3"
+                                        Height="18"
+                                        Background="{StaticResource DevSwitchAccentBrush}"
+                                        CornerRadius="2"
+                                        VerticalAlignment="Center" />
+                                    <FontIcon
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="16"
+                                        Glyph="&#xE80F;" />
+                                    <TextBlock
+                                        x:Name="HomeNavText"
+                                        Grid.Column="2"
+                                        Text="首页"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+
+                            <Button
+                                x:Name="SdkNavButton"
+                                MinHeight="40"
+                                Padding="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Click="OnSdkNavClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="SdkIndicator"
+                                        Width="3"
+                                        Height="18"
+                                        Background="{StaticResource DevSwitchAccentBrush}"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed"
+                                        VerticalAlignment="Center" />
+                                    <FontIcon
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="16"
+                                        Glyph="&#xE8B7;" />
+                                    <TextBlock
+                                        x:Name="SdkNavText"
+                                        Grid.Column="2"
+                                        Text="SDK 管理"
+                                        VerticalAlignment="Center" />
+                                    <!-- 展开/收起箭头：指示子菜单（Java/Maven/...）当前是否展开，点父项可切换。 -->
+                                    <FontIcon
+                                        x:Name="SdkChevronIcon"
+                                        Grid.Column="3"
+                                        Margin="0,0,12,0"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="12"
+                                        Foreground="{StaticResource DevSwitchNavIconBrush}"
+                                        Glyph="&#xE70D;" />
+                                </Grid>
+                            </Button>
+
+                            <StackPanel
+                                x:Name="SdkChildrenPanel"
+                                Margin="32,2,0,10"
+                                Spacing="2">
+                                <Button
+                                    x:Name="JavaNavButton"
+                                    MinHeight="34"
+                                    Padding="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                    Click="OnJavaNavClick">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border
+                                            x:Name="JavaIndicator"
+                                            Width="3"
+                                            Height="16"
+                                            Background="{StaticResource DevSwitchAccentBrush}"
+                                            CornerRadius="2"
+                                            Visibility="Collapsed"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="JavaNavText"
+                                            Grid.Column="1"
+                                            Text="Java"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+                                <Button
+                                    x:Name="MavenNavButton"
+                                    MinHeight="34"
+                                    Padding="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                    Click="OnMavenNavClick">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border
+                                            x:Name="MavenIndicator"
+                                            Width="3"
+                                            Height="16"
+                                            Background="{StaticResource DevSwitchAccentBrush}"
+                                            CornerRadius="2"
+                                            Visibility="Collapsed"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="MavenNavText"
+                                            Grid.Column="1"
+                                            Text="Maven"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+                                <Button
+                                    x:Name="NodeNavButton"
+                                    MinHeight="34"
+                                    Padding="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                    Click="OnNodeNavClick">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border
+                                            x:Name="NodeIndicator"
+                                            Width="3"
+                                            Height="16"
+                                            Background="{StaticResource DevSwitchAccentBrush}"
+                                            CornerRadius="2"
+                                            Visibility="Collapsed"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="NodeNavText"
+                                            Grid.Column="1"
+                                            Text="Node.js"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+                                <Button
+                                    x:Name="GoNavButton"
+                                    MinHeight="34"
+                                    Padding="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                    Click="OnGoNavClick">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border
+                                            x:Name="GoIndicator"
+                                            Width="3"
+                                            Height="16"
+                                            Background="{StaticResource DevSwitchAccentBrush}"
+                                            CornerRadius="2"
+                                            Visibility="Collapsed"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="GoNavText"
+                                            Grid.Column="1"
+                                            Text="Go"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
+                            </StackPanel>
+
+                            <Button
+                                x:Name="ProfilesNavButton"
+                                MinHeight="40"
+                                Padding="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Click="OnProfilesNavClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="ProfilesIndicator"
+                                        Width="3"
+                                        Height="18"
+                                        Background="{StaticResource DevSwitchAccentBrush}"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed"
+                                        VerticalAlignment="Center" />
+                                    <FontIcon
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="16"
+                                        Glyph="&#xE77B;" />
+                                    <TextBlock
+                                        x:Name="ProfilesNavText"
+                                        Grid.Column="2"
+                                        Text="配置档案"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+
+                            <Button
+                                x:Name="DoctorNavButton"
+                                MinHeight="40"
+                                Padding="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Click="OnDoctorNavClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="DoctorIndicator"
+                                        Width="3"
+                                        Height="18"
+                                        Background="{StaticResource DevSwitchAccentBrush}"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed"
+                                        VerticalAlignment="Center" />
+                                    <FontIcon
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="16"
+                                        Glyph="&#xE90F;" />
+                                    <TextBlock
+                                        x:Name="DoctorNavText"
+                                        Grid.Column="2"
+                                        Text="环境诊断"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+
+                            <Button
+                                x:Name="LogsNavButton"
+                                MinHeight="40"
+                                Padding="0"
+                                HorizontalAlignment="Stretch"
+                                HorizontalContentAlignment="Stretch"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Click="OnLogsNavClick">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4" />
+                                        <ColumnDefinition Width="40" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Border
+                                        x:Name="LogsIndicator"
+                                        Width="3"
+                                        Height="18"
+                                        Background="{StaticResource DevSwitchAccentBrush}"
+                                        CornerRadius="2"
+                                        Visibility="Collapsed"
+                                        VerticalAlignment="Center" />
+                                    <FontIcon
+                                        Grid.Column="1"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontFamily="Segoe MDL2 Assets"
+                                        FontSize="16"
+                                        Glyph="&#xE8A5;" />
+                                    <TextBlock
+                                        x:Name="LogsNavText"
+                                        Grid.Column="2"
+                                        Text="日志"
+                                        VerticalAlignment="Center" />
+                                </Grid>
+                            </Button>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <Button
+                        x:Name="SettingsNavButton"
+                        Grid.Row="1"
+                        MinHeight="40"
+                        Padding="0"
+                        HorizontalAlignment="Stretch"
+                        HorizontalContentAlignment="Stretch"
+                        Background="Transparent"
+                        BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                        Click="OnSettingsNavClick">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="4" />
+                                <ColumnDefinition Width="40" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border
+                                x:Name="SettingsIndicator"
+                                Width="3"
+                                Height="18"
+                                Background="{StaticResource DevSwitchAccentBrush}"
+                                CornerRadius="2"
+                                Visibility="Collapsed"
+                                VerticalAlignment="Center" />
+                            <FontIcon
+                                Grid.Column="1"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="16"
+                                Glyph="&#xE713;" />
+                            <TextBlock
+                                x:Name="SettingsNavText"
+                                Grid.Column="2"
+                                Text="设置"
+                                VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- 右侧内容：Home 使用 Gallery 式 Hero，SDK/Settings 为工具页。 -->
+            <Grid Grid.Column="1" Background="{StaticResource DevSwitchCardBrush}">
+                <ScrollViewer x:Name="HomeContent" Visibility="Visible">
+                    <StackPanel Padding="36,28,36,44" Spacing="28">
+                        <Grid Height="292">
+                            <Grid.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#EAF3FF" Offset="0" />
+                                    <GradientStop Color="#F7FAFF" Offset="0.48" />
+                                    <GradientStop Color="#EEF2F7" Offset="1" />
+                                </LinearGradientBrush>
+                            </Grid.Background>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="420" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Margin="36,36,0,0" MaxWidth="560" Spacing="8">
+                                <TextBlock FontSize="16" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="Windows App SDK · 开发环境切换器" />
+                                <TextBlock FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchPrimaryTextBrush}" Text="DevSwitch" />
+                                <TextBlock FontSize="15" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="统一管理 JDK、Maven、Node.js、Go 等本地开发运行时。快速导入、检查路径，并安全切换环境。" TextWrapping="Wrap" />
+                                <StackPanel Margin="0,18,0,0" Orientation="Horizontal" Spacing="10">
+                                    <Button Click="OnShowJavaSdkClick" Content="打开 SDK 管理" Style="{StaticResource AccentButtonStyle}" />
+                                    <Button Click="OnDoctorNavClick" Content="运行环境诊断" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <Grid Grid.Column="1" Margin="0,26,34,24">
+                                <Ellipse Width="260" Height="260" HorizontalAlignment="Right" Fill="#BBD7FF" Opacity="0.42" />
+                                <Border Width="310" Height="174" Margin="0,34,22,0" HorizontalAlignment="Right" VerticalAlignment="Top" Background="#FFFFFF" BorderBrush="#D7E3F6" BorderThickness="1" CornerRadius="10">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="32" />
+                                            <RowDefinition Height="*" />
+                                        </Grid.RowDefinitions>
+                                        <Border Background="#F3F6FB" BorderBrush="#D7E3F6" BorderThickness="0,0,0,1" CornerRadius="10,10,0,0" />
+                                        <StackPanel Margin="12,0,0,0" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <Ellipse Width="8" Height="8" Fill="#EF4444" />
+                                            <Ellipse Width="8" Height="8" Fill="#F59E0B" />
+                                            <Ellipse Width="8" Height="8" Fill="#22C55E" />
+                                        </StackPanel>
+                                        <Grid Grid.Row="1" Padding="18,14">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="96" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="8">
+                                                <Border Height="12" Background="#0F6CBD" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                                <Border Height="12" Background="#DDEBFF" CornerRadius="3" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1" Margin="18,0,0,0" Spacing="10">
+                                                <TextBlock FontWeight="SemiBold" Text="JAVA_HOME" />
+                                                <Border Height="10" Background="#E5E7EB" CornerRadius="3" />
+                                                <Border Height="10" Width="130" HorizontalAlignment="Left" Background="#E5E7EB" CornerRadius="3" />
+                                                <Border Width="86" Height="24" HorizontalAlignment="Left" Background="#EAF3FF" CornerRadius="12">
+                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="#0F6CBD" Text="使用中" />
+                                                </Border>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                                <Border Width="178" Height="74" Margin="0,0,0,18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#FFFFFF" BorderBrush="#D7E3F6" BorderThickness="1" CornerRadius="10" Padding="14">
+                                    <StackPanel Spacing="5">
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="当前运行时" />
+                                        <TextBlock FontSize="18" FontWeight="SemiBold" Text="Temurin 17" />
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="快捷操作" />
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Button Grid.Column="0" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnShowJavaSdkClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE8B7;" />
+                                        <TextBlock FontWeight="SemiBold" Text="SDK 管理" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="导入并切换 SDK" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="1" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnDoctorNavClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE90F;" />
+                                        <TextBlock FontWeight="SemiBold" Text="环境诊断" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="检查 PATH 与环境变量" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="2" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnProfilesNavClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE77B;" />
+                                        <TextBlock FontWeight="SemiBold" Text="配置档案" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="保存项目环境预设" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Grid.Column="3" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnSettingsNavClick">
+                                    <StackPanel Spacing="4">
+                                        <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE713;" />
+                                        <TextBlock FontWeight="SemiBold" Text="设置" />
+                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="语言、更新与反馈" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <!-- SDK 管理总览页：与具体分类（Java 等）区分。点卡片进入对应分类管理。 -->
+                <ScrollViewer x:Name="SdkOverviewContent" Visibility="Collapsed">
+                    <StackPanel Padding="36,30,36,44" Spacing="22">
+                        <StackPanel Spacing="4">
+                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="SDK 管理" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="集中管理本机的 Java、Maven、Node.js、Go 运行时。点选下方分类卡片进入对应版本管理。" TextWrapping="Wrap" />
+                        </StackPanel>
+
+                        <!-- 四类 SDK 卡片入口：自适应换行，悬停有阴影，整卡可点。 -->
+                        <ItemsControl x:Name="SdkOverviewCards">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <controls:ItemsWrapGrid Orientation="Horizontal" ItemWidth="280" ItemHeight="132" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Button
+                                        Width="264"
+                                        Height="116"
+                                        Margin="0,0,16,16"
+                                        Padding="18,16"
+                                        HorizontalAlignment="Stretch"
+                                        HorizontalContentAlignment="Stretch"
+                                        VerticalContentAlignment="Top"
+                                        Background="{StaticResource DevSwitchCardBrush}"
+                                        BorderBrush="{StaticResource DevSwitchBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Click="OnSdkOverviewCardClick"
+                                        Tag="{Binding Category}">
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Border
+                                                    Width="36"
+                                                    Height="36"
+                                                    Background="{StaticResource DevSwitchAccentSubtleBrush}"
+                                                    CornerRadius="8">
+                                                    <FontIcon
+                                                        FontFamily="Segoe MDL2 Assets"
+                                                        FontSize="18"
+                                                        Foreground="{StaticResource DevSwitchAccentTextBrush}"
+                                                        Glyph="{Binding IconGlyph}" />
+                                                </Border>
+                                                <TextBlock
+                                                    VerticalAlignment="Center"
+                                                    FontSize="18"
+                                                    FontWeight="SemiBold"
+                                                    Text="{Binding Category}" />
+                                            </StackPanel>
+                                            <TextBlock
+                                                Grid.Row="1"
+                                                Margin="0,12,0,0"
+                                                Foreground="{StaticResource DevSwitchSecondaryTextBrush}"
+                                                FontSize="13"
+                                                Text="{Binding SummaryLine}"
+                                                TextWrapping="Wrap" />
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid x:Name="SdkContent" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Padding="36,26,36,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding SelectedCategory}" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="管理当前 SDK 类型的本地版本、来源路径和切换状态。" />
+                        </StackPanel>
+                        <Border
+                            Grid.Column="1"
+                            Padding="10,4"
+                            Background="{StaticResource DevSwitchAccentSubtleBrush}"
+                            CornerRadius="12"
+                            VerticalAlignment="Center">
+                            <TextBlock
+                                FontSize="12"
+                                FontWeight="SemiBold"
+                                Foreground="{StaticResource DevSwitchAccentTextBrush}"
+                                Text="{Binding CatalogBadgeText}" />
+                        </Border>
+                    </Grid>
+                    <Border
+                        Grid.Row="1"
+                        Margin="36,0,36,16"
+                        Padding="14"
+                        Background="{StaticResource DevSwitchCardBrush}"
+                        BorderBrush="{StaticResource DevSwitchBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="10">
+                        <Grid ColumnSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="AddLocalSdkButton" Click="OnAddLocalSdkClick" Style="{StaticResource AccentButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE710;" />
+                                        <TextBlock Text="添加本地 SDK" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="DownloadSdkButton" Click="OnDownloadSdkClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE896;" />
+                                        <TextBlock Text="下载" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Click="OnRefreshSdkCatalogClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE72C;" />
+                                        <TextBlock Text="刷新" />
+                                    </StackPanel>
+                                </Button>
+                                <Button Click="OnDetectCurrentClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE721;" />
+                                        <TextBlock Text="检测当前" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="ResetEnvironmentButton" Click="OnResetEnvironmentClick">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE777;" />
+                                        <TextBlock Text="重置" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+
+                            <ComboBox
+                                Grid.Column="2"
+                                MinWidth="148"
+                                PlaceholderText="状态">
+                                <ComboBoxItem Content="全部" />
+                                <ComboBoxItem Content="使用中" />
+                                <ComboBoxItem Content="可用" />
+                                <ComboBoxItem Content="不可用" />
+                            </ComboBox>
+                        </Grid>
+                    </Border>
+                    <Border
+                        Grid.Row="2"
+                        Margin="36,0,36,16"
+                        Padding="14,10"
+                        Background="{StaticResource DevSwitchInfoBackgroundBrush}"
+                        BorderBrush="{StaticResource DevSwitchInfoBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon
+                                FontFamily="Segoe MDL2 Assets"
+                                FontSize="14"
+                                Foreground="{StaticResource DevSwitchAccentTextBrush}"
+                                Glyph="&#xE946;"
+                                VerticalAlignment="Center" />
+                            <TextBlock
+                                Foreground="{StaticResource DevSwitchAccentTextBrush}"
+                                Text="{Binding CatalogNoticeText}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Border>
+                    <Border
+                        Grid.Row="3"
+                        Margin="36,0,36,8"
+                        Padding="18,10"
+                        Background="{StaticResource DevSwitchTableHeaderBrush}"
+                        CornerRadius="8">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="240" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="100" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="120" />
+                                <ColumnDefinition Width="170" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="名称" />
+                            <TextBlock Grid.Column="1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="版本" />
+                            <TextBlock Grid.Column="2" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="来源" />
+                            <TextBlock Grid.Column="3" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="路径" />
+                            <TextBlock Grid.Column="4" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="状态" />
+                            <TextBlock Grid.Column="5" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="操作" />
+                        </Grid>
+                    </Border>
+                    <Grid Grid.Row="4">
+                        <ListView
+                            x:Name="SdkVersionsListView"
+                            Padding="0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            ItemsSource="{Binding VisibleVersions}"
+                            SelectionMode="None">
+                            <ListView.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="36,0,36,8"
+                                        Background="{StaticResource DevSwitchCardBrush}"
+                                        BorderBrush="{StaticResource DevSwitchBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                        <Grid MinHeight="64" Padding="18,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="240" />
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="100" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="120" />
+                                                <ColumnDefinition Width="170" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Spacing="1" VerticalAlignment="Center">
+                                                <TextBlock FontWeight="SemiBold" Foreground="{StaticResource DevSwitchPrimaryTextBrush}" Text="{Binding Name}" />
+                                                <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="SDK 运行时" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="2" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="{Binding Source}" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="3" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            <Border Grid.Column="4" Background="{StaticResource DevSwitchAccentSubtleBrush}" CornerRadius="12" HorizontalAlignment="Left" Padding="9,4" VerticalAlignment="Center">
+                                                <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="{Binding Status}" />
+                                            </Border>
+                                            <StackPanel Grid.Column="5" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                                <Button Click="OnSwitchSdkClick" Content="{Binding Operation}" IsEnabled="{Binding CanSwitch}" MinWidth="68" />
+                                                <Button MinWidth="36" ToolTipService.ToolTip="更多操作">
+                                                    <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE712;" />
+                                                    <Button.Flyout>
+                                                        <MenuFlyout>
+                                                            <MenuFlyoutItem Click="OnVerifySdkClick" Text="验证">
+                                                                <MenuFlyoutItem.Icon>
+                                                                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE9D9;" />
+                                                                </MenuFlyoutItem.Icon>
+                                                            </MenuFlyoutItem>
+                                                            <MenuFlyoutItem Click="OnEditSdkClick" Text="编辑名称">
+                                                                <MenuFlyoutItem.Icon>
+                                                                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE70F;" />
+                                                                </MenuFlyoutItem.Icon>
+                                                            </MenuFlyoutItem>
+                                                            <MenuFlyoutSeparator />
+                                                            <MenuFlyoutItem Click="OnDeleteSdkClick" Text="删除">
+                                                                <MenuFlyoutItem.Icon>
+                                                                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE74D;" />
+                                                                </MenuFlyoutItem.Icon>
+                                                            </MenuFlyoutItem>
+                                                        </MenuFlyout>
+                                                    </Button.Flyout>
+                                                </Button>
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                        <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center" Visibility="{Binding EmptyStateVisibility}">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" Text="暂无版本" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" HorizontalAlignment="Center" MaxWidth="360" Text="{Binding EmptyStateText}" TextAlignment="Center" TextWrapping="Wrap" />
+                            <Button x:Name="EmptyAddLocalSdkButton" Click="OnAddLocalSdkClick" Content="添加本地 SDK" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+
+                <ScrollViewer x:Name="SettingsContent" Visibility="Collapsed">
+                    <StackPanel Padding="36,30,36,44" Spacing="26">
+                        <StackPanel Spacing="4">
+                            <TextBlock x:Name="SettingsTitleText" FontSize="30" FontWeight="SemiBold" Text="设置" />
+                            <TextBlock x:Name="SettingsSubtitleText" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="管理 DevSwitch 的界面语言、更新与反馈。" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Name="SettingsLanguageHeaderText" FontSize="20" FontWeight="SemiBold" Text="界面语言" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="语言" />
+                                        <TextBlock x:Name="SettingsLanguageDescText" FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="选择 DevSwitch 使用的界面语言，切换后立即生效。" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="LanguageStatusText" FontSize="12" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="当前语言：简体中文" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="LanguageComboBox" Grid.Column="1" MinWidth="200" HorizontalAlignment="Right" SelectedIndex="1" SelectionChanged="OnLanguageSelectionChanged">
+                                        <ComboBoxItem Content="跟随系统" Tag="auto" />
+                                        <ComboBoxItem Content="简体中文" Tag="zh-CN" />
+                                        <ComboBoxItem Content="English" Tag="en-US" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="数据目录" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <StackPanel Spacing="10">
+                                    <TextBlock FontWeight="SemiBold" Text="数据存放位置" />
+                                    <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="导入记录、配置与下载的 SDK 都保存在数据目录。" TextWrapping="Wrap" />
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="240" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock FontWeight="SemiBold" Text="位置模式" />
+                                            <TextBlock x:Name="DataModeHintText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="便携：随应用目录走；固定到 C 盘：移动工具不影响数据与环境。" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <ComboBox x:Name="DataModeComboBox" Grid.Column="1" MinWidth="220" HorizontalAlignment="Right" SelectionChanged="OnDataModeSelectionChanged">
+                                            <ComboBoxItem Content="便携（应用同目录）" Tag="portable" />
+                                            <ComboBoxItem Content="固定到 C 盘（推荐随意移动工具）" Tag="localappdata" />
+                                            <ComboBoxItem Content="自定义目录" Tag="custom" />
+                                        </ComboBox>
+                                    </Grid>
+                                    <TextBlock x:Name="DataRootPathText" FontSize="13" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="当前数据目录：" TextWrapping="Wrap" />
+                                    <StackPanel Orientation="Horizontal" Spacing="8">
+                                        <Button x:Name="OpenDataRootButton" Click="OnOpenDataRootClick" Content="打开目录" />
+                                        <Button x:Name="ChangeDataRootButton" Click="OnChangeDataRootClick" Content="自定义并迁移" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="DataRootHintText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="切换模式或更改目录后需重启应用生效；可选择把已有数据迁移到新目录。" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="下载" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="220" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="下载并发数" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="同时下载的分块数量，范围 1-8。数值越高速度可能越快，但更占用网络与磁盘。" TextWrapping="Wrap" />
+                                        <TextBlock x:Name="DownloadParallelismStatusText" FontSize="12" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="当前并发数：4" />
+                                    </StackPanel>
+                                    <ComboBox x:Name="DownloadParallelismComboBox" Grid.Column="1" MinWidth="200" HorizontalAlignment="Right" SelectionChanged="OnDownloadParallelismChanged">
+                                        <ComboBoxItem Content="1" Tag="1" />
+                                        <ComboBoxItem Content="2" Tag="2" />
+                                        <ComboBoxItem Content="3" Tag="3" />
+                                        <ComboBoxItem Content="4" Tag="4" />
+                                        <ComboBoxItem Content="5" Tag="5" />
+                                        <ComboBoxItem Content="6" Tag="6" />
+                                        <ComboBoxItem Content="7" Tag="7" />
+                                        <ComboBoxItem Content="8" Tag="8" />
+                                    </ComboBox>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="更新" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <StackPanel Spacing="14">
+                                    <!-- GitHub 仓库配置：填 owner/repo，更新检查与下载都用它。 -->
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="260" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock FontWeight="SemiBold" Text="GitHub 仓库" />
+                                            <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="填写发布仓库（owner/repo），用于检查与下载新版本。" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <TextBox x:Name="UpdateRepositoryTextBox" Grid.Column="1" PlaceholderText="owner/repo" VerticalAlignment="Center" LostFocus="OnUpdateRepositoryLostFocus" />
+                                    </Grid>
+
+                                    <Border Height="1" Background="{StaticResource DevSwitchBorderBrush}" />
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Spacing="2">
+                                            <TextBlock x:Name="UpdateCurrentVersionText" FontWeight="SemiBold" Text="DevSwitch 当前版本 v0.1.0" />
+                                            <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="检查是否有可用的新版本，可一键下载覆盖更新。" />
+                                            <TextBlock x:Name="UpdateStatusText" FontSize="12" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="" Visibility="Collapsed" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Top">
+                                            <Button x:Name="CheckUpdateButton" Click="OnCheckUpdateClick" Content="检查更新" />
+                                            <Button x:Name="DownloadUpdateButton" Click="OnDownloadUpdateClick" Content="下载并更新" Visibility="Collapsed"
+                                                    Background="{StaticResource DevSwitchAccentBrush}" Foreground="{StaticResource DevSwitchOnAccentBrush}" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- 下载/更新进度条：仅在执行更新时显示。 -->
+                                    <StackPanel x:Name="UpdateProgressPanel" Spacing="6" Visibility="Collapsed">
+                                        <ProgressBar x:Name="UpdateProgressBar" Minimum="0" Maximum="1" Value="0" Height="6" />
+                                        <TextBlock x:Name="UpdateProgressText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Spacing="12">
+                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="反馈" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock FontWeight="SemiBold" Text="发送反馈" />
+                                        <TextBlock FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="报告问题或提出功能建议。" />
+                                    </StackPanel>
+                                    <Button Grid.Column="1" Click="OnFeedbackClick" Content="反馈" />
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <Grid x:Name="DoctorContent" Visibility="Collapsed">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0" Padding="36,26,36,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Spacing="4">
+                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="环境诊断" />
+                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="检查数据目录、current 链接、环境变量、PATH、命令版本与 helper 可用性。" />
+                        </StackPanel>
+                        <Button x:Name="RunDoctorButton" Grid.Column="1" Click="OnRunDoctorClick" Style="{StaticResource AccentButtonStyle}" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE72C;" />
+                                <TextBlock Text="重新诊断" />
+                            </StackPanel>
+                        </Button>
+                    </Grid>
+
+                    <Border
+                        Grid.Row="1"
+                        Margin="36,0,36,12"
+                        Padding="16,12"
+                        Background="{StaticResource DevSwitchInfoBackgroundBrush}"
+                        BorderBrush="{StaticResource DevSwitchInfoBorderBrush}"
+                        BorderThickness="1"
+                        CornerRadius="8">
+                        <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                            <ProgressRing x:Name="DoctorProgressRing" Width="18" Height="18" IsActive="False" Visibility="Collapsed" />
+                            <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Foreground="{StaticResource DevSwitchAccentTextBrush}" Glyph="&#xE946;" VerticalAlignment="Center" />
+                            <TextBlock x:Name="DoctorSummaryText" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="点击「重新诊断」开始检查。" TextWrapping="Wrap" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+
+                    <ScrollViewer Grid.Row="2">
+                        <ItemsControl x:Name="DoctorResultsControl" Padding="36,0,36,36">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border
+                                        Margin="0,0,0,8"
+                                        Background="{StaticResource DevSwitchCardBrush}"
+                                        BorderBrush="{StaticResource DevSwitchBorderBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                        <Grid Padding="16,12" ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="10" Height="10" Background="{Binding SeverityBrush}" CornerRadius="5" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                            <StackPanel Grid.Column="1" Spacing="3">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock FontWeight="SemiBold" Foreground="{StaticResource DevSwitchPrimaryTextBrush}" Text="{Binding Title}" />
+                                                    <Border Grid.Column="1" Background="{Binding SeverityBrush}" CornerRadius="10" Padding="8,2">
+                                                        <TextBlock FontSize="11" FontWeight="SemiBold" Foreground="White" Text="{Binding SeverityText}" />
+                                                    </Border>
+                                                </Grid>
+                                                <TextBlock Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="{Binding Detail}" TextWrapping="Wrap" />
+                                                <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" FontSize="12" Text="{Binding Suggestion}" TextWrapping="Wrap" Visibility="{Binding SuggestionVisibility}" />
+                                            </StackPanel>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
+                </Grid>
+
+                <!-- 配置档案页：独立 UserControl，自包含增删改与一键应用交互。 -->
+                <views:ProfilesView x:Name="ProfilesContent" Visibility="Collapsed" />
+
+                <!-- 日志页：独立 UserControl，异步读取+脱敏展示，支持过滤/刷新/清理。 -->
+                <views:LogsView x:Name="LogsContent" Visibility="Collapsed" />
+
+                <Grid x:Name="PlaceholderContent" Visibility="Collapsed">
+                    <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center">
+                        <TextBlock x:Name="PlaceholderTitleText" FontSize="28" FontWeight="SemiBold" HorizontalAlignment="Center" Text="即将推出" />
+                        <TextBlock x:Name="PlaceholderDescriptionText" Foreground="{StaticResource DevSwitchMutedTextBrush}" HorizontalAlignment="Center" Text="该页面仍是预览占位。" TextWrapping="Wrap" />
+                        <Button Click="OnPlaceholderActionClick" Content="了解更多" />
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Grid>
+
+        <!-- ============ 忙碌动画覆盖层（长耗时操作时显示，避免误判卡死） ============ -->
+        <!-- 跨 RootGrid 两行（Row=0 标题栏 + Row=1 内容），整窗覆盖并拦截鼠标点击 -->
+        <Grid x:Name="BusyOverlay"
+              Grid.Row="0"
+              Grid.RowSpan="2"
+              Background="#99000000"
+              Visibility="Collapsed">
+            <!-- 居中卡片：圆角 + 浅色主题背景 + 内边距，竖直排列加载圈与文案 -->
+            <Border Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                    CornerRadius="12"
+                    Padding="32,28"
+                    MinWidth="280"
+                    MaxWidth="420"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center">
+                <StackPanel HorizontalAlignment="Center"
+                            Spacing="16">
+                    <!-- 加载动画圈，IsActive 由代码运行时控制 -->
+                    <ProgressRing x:Name="BusyProgressRing"
+                                  Width="48"
+                                  Height="48"
+                                  HorizontalAlignment="Center" />
+                    <!-- 标题：较大字号，居中 -->
+                    <TextBlock x:Name="BusyTitleText"
+                               FontSize="18"
+                               FontWeight="SemiBold"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               Text="" />
+                    <!-- 次要说明：灰色，居中，自动换行 -->
+                    <TextBlock x:Name="BusyMessageText"
+                               Foreground="{StaticResource DevSwitchMutedTextBrush}"
+                               HorizontalAlignment="Center"
+                               TextAlignment="Center"
+                               TextWrapping="Wrap"
+                               Text="" />
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
