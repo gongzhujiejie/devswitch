@@ -47,3 +47,7 @@ TestResults/
 
 # ===== 本地构建临时环境（dotnet 缓存等，不入库）=====
 .tmp/
+
+# ===== NarraFork 工作区与 dotnet home（本地环境，不入库）=====
+.narrafork/
+.dotnet-home/
