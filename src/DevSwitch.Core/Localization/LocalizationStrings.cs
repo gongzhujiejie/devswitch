@@ -68,7 +68,12 @@ public static class LocalizationStrings
         ["logs.subtitle"] = "查看导入、切换与诊断记录。",
         ["logs.empty"] = "暂无日志记录",
         ["logs.allChannels"] = "全部",
-        ["logs.prune"] = "清理过期"
+        ["logs.prune"] = "清理过期",
+
+        // SDK 管理表格列与路径交互
+        ["sdk.column.path"] = "路径",
+        ["sdk.path.tooltip"] = "单击复制完整路径",
+        ["sdk.path.copied"] = "已复制路径到剪贴板"
     };
 
     // 英文文案表。key 必须与中文表完全对齐。
@@ -124,7 +129,12 @@ public static class LocalizationStrings
         ["logs.subtitle"] = "View import, switch and diagnostic records.",
         ["logs.empty"] = "No log entries",
         ["logs.allChannels"] = "All",
-        ["logs.prune"] = "Prune Expired"
+        ["logs.prune"] = "Prune Expired",
+
+        // SDK management table columns and path interaction
+        ["sdk.column.path"] = "Path",
+        ["sdk.path.tooltip"] = "Click to copy the full path",
+        ["sdk.path.copied"] = "Path copied to clipboard"
     };
 
     // 全部 key 的稳定列表。以中文表为基准（两表 key 集合相等，由测试保证），按字典序排序使结果可预期。

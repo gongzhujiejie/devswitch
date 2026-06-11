@@ -44,6 +44,22 @@ public sealed partial class MainWindow
     // ===================== SDK 行操作 =====================
 
     /// <summary>
+    /// 状态筛选下拉选择变更：把中文文案解析为 <see cref="SdkStatusFilter"/> 写回 ViewModel，
+    /// ViewModel 内部会重算可见集合并通知列表绑定刷新。
+    /// </summary>
+    private void OnStatusFilterChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (sender is not ComboBox combo || combo.SelectedItem is not ComboBoxItem item)
+        {
+            return;
+        }
+
+        // ComboBoxItem.Content 默认是 string；以中文文案为准解析，未知值回退到 All。
+        string? text = item.Content?.ToString();
+        viewModel.SelectedStatusFilter = SdkStatusFilterMatcher.ParseFromComboBoxText(text);
+    }
+
+    /// <summary>
     /// 行「切换/当前」主按钮：调用 SdkSwitchService 切换到该记录。
     /// </summary>
     private async void OnSwitchSdkClick(object sender, RoutedEventArgs e)
@@ -143,6 +159,11 @@ public sealed partial class MainWindow
                 CommandVerificationOutcome.NonZeroExit => $"命令 {command.FileName} 退出码非零（{command.ExitCode}）。",
                 _ => command.Message,
             };
+
+            // 把命令验证结果回写到行模型：失败时徽章立即变"不可用"并退出当前过滤组。
+            // 仅 Verified 视为成功；ParseFailed/NotStarted/TimedOut/NonZeroExit 全部钳为"不可用"。
+            bool verifiedOk = command.Outcome == CommandVerificationOutcome.Verified;
+            viewModel.ApplyCommandVerificationResult(row.Id, verifiedOk);
 
             await ShowSimpleDialogAsync("命令验证结果", commandDetail);
         });

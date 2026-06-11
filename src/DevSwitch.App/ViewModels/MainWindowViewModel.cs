@@ -1,7 +1,9 @@
 // 文件用途：主窗口 ViewModel，负责把真实 sdks.json catalog 投影到 WinUI SDK 管理页。
-// 创建/修改日期：2026-06-09
+// 创建/修改日期：2026-06-10
 // 语言版本要求：C# 12 / .NET 8+
 // 依赖库：DevSwitch.Core、Microsoft.UI.Xaml
+// NOTE: 合法授权学习使用，仅限本地环境。
+//       该 ViewModel 只负责 UI 状态和真实 catalog 投影；导入、切换等副作用由窗口事件桥接到 Core 服务。
 
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -15,9 +17,6 @@ namespace DevSwitch.App.ViewModels;
 /// <summary>
 /// 主窗口 ViewModel。
 /// </summary>
-/// <remarks>
-/// 该 ViewModel 只负责 UI 状态和真实 catalog 投影；导入、切换等副作用由窗口事件桥接到 Core 服务。
-/// </remarks>
 public sealed class MainWindowViewModel : INotifyPropertyChanged
 {
     private readonly ISdkCatalogProvider catalogProvider;
@@ -26,8 +25,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private string? loadErrorText;
     private bool hasLoadedCatalog;
 
+    // 状态筛选下拉选中的离散值；默认 All 等价于不过滤，保持原"全部"行为。
+    private SdkStatusFilter selectedStatusFilter = SdkStatusFilter.All;
+
     // 可见行缓存：避免每次绑定读取/空状态判断都重新 LINQ 过滤并分配新数组。
-    // 仅在 SelectedCategory 变化或 Versions 重新加载时由 RebuildVisibleVersions 重算一次。
+    // 仅在 SelectedCategory / SelectedStatusFilter 变化、Versions 重新加载或单行 Status 变更时由 RebuildVisibleVersions 重算。
     private IReadOnlyList<SdkVersionRow> visibleVersionsCache = Array.Empty<SdkVersionRow>();
 
     /// <summary>
@@ -81,17 +83,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 当前生效的状态筛选值。默认 All（"全部"）。
+    /// </summary>
+    /// <remarks>
+    /// 由 MainWindow 状态 ComboBox 的 SelectionChanged 桥接写入。每次变更都重算可见行缓存并通知 UI。
+    /// </remarks>
+    public SdkStatusFilter SelectedStatusFilter
+    {
+        get => selectedStatusFilter;
+        set
+        {
+            if (selectedStatusFilter == value)
+            {
+                return;
+            }
+
+            selectedStatusFilter = value;
+            RebuildVisibleVersions();
+            NotifyVisibleStateChanged();
+            OnPropertyChanged(nameof(SelectedStatusFilter));
+        }
+    }
+
+    /// <summary>
     /// 从真实 sdks.json 映射出的全量 SDK 行。
     /// </summary>
     public ObservableCollection<SdkVersionRow> Versions { get; }
 
     /// <summary>
-    /// 当前分类下需要展示的 SDK 行。
+    /// 当前分类与过滤器下需要展示的 SDK 行。
     /// </summary>
-    /// <remarks>
-    /// 直接返回缓存结果，不在 getter 内做 LINQ 过滤；缓存由 <see cref="RebuildVisibleVersions"/>
-    /// 在分类切换或 catalog 重新加载时统一刷新，避免绑定层多次访问触发重复计算与数组分配。
-    /// </remarks>
     public IReadOnlyList<SdkVersionRow> VisibleVersions => visibleVersionsCache;
 
     /// <summary>
@@ -174,7 +195,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
 
             if (Versions.Count == 0)
             {
-                return "config/sdks.json 暂无 SDK 记录，可通过“添加本地 SDK”导入本机已有工具链。";
+                return "config/sdks.json 暂无 SDK 记录，可通过\u201c添加本地 SDK\u201d导入本机已有工具链。";
             }
 
             return "已从 config/sdks.json 读取 SDK 目录。切换 PATH/JAVA_HOME/NODE_HOME 将在后续步骤接入。";
@@ -193,15 +214,11 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>
     /// 空状态区域的可见性。
     /// </summary>
-    /// <remarks>
-    /// 基于已缓存的可见行结果判断，不再次触发过滤计算。
-    /// </remarks>
     public Visibility EmptyStateVisibility => visibleVersionsCache.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
     /// 首次加载真实 SDK catalog。
     /// </summary>
-    /// <param name="cancellationToken">窗口生命周期取消令牌。</param>
     public Task LoadAsync(CancellationToken cancellationToken = default)
     {
         return RefreshAsync(cancellationToken);
@@ -210,7 +227,6 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <summary>
     /// 重新读取真实 SDK catalog 并刷新 UI 行。
     /// </summary>
-    /// <param name="cancellationToken">窗口生命周期取消令牌。</param>
     public async Task RefreshAsync(CancellationToken cancellationToken = default)
     {
         if (IsLoading)
@@ -226,12 +242,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             var catalog = await catalogProvider.LoadOrCreateAsync(cancellationToken);
             var rows = SdkCatalogViewService.ToRows(catalog).Select(ToSdkVersionRow).ToArray();
 
-            // 先在本地构建好完整行集合，再用单次替换刷新 Versions，
-            // 避免逐项 Add 在大列表时产生 CollectionChanged 通知风暴。
             ReplaceVersions(rows);
 
             hasLoadedCatalog = true;
-            // catalog 重新加载后重算一次可见行缓存，再统一通知绑定层。
             RebuildVisibleVersions();
             NotifyVisibleStateChanged();
             OnPropertyChanged(nameof(CatalogBadgeText));
@@ -243,10 +256,9 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            Versions.Clear();
+            ReplaceVersions(Array.Empty<SdkVersionRow>());
             hasLoadedCatalog = true;
             LoadErrorText = ex.Message;
-            // 读取失败时清空可见行缓存，确保空状态判断与列表绑定一致。
             RebuildVisibleVersions();
             NotifyVisibleStateChanged();
         }
@@ -271,6 +283,48 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// 把命令验证结果回写到对应 SDK 行：
+    /// - 验证成功 → 维持原"使用中/可用"语义（活跃保持 Active 文案，否则置为 Usable）。
+    /// - 验证失败 / 命令未启动 / 超时 / 解析失败 → 置为「不可用」并禁用切换按钮。
+    /// 回写后立即触发 INPC，让徽章 UI 重绘；同时重算可见行，使当前过滤器即时生效。
+    /// </summary>
+    /// <param name="rowId">SDK 记录稳定 ID（与 row.Id 对应）。</param>
+    /// <param name="success">命令验证是否成功（成功=Verified；其余皆视为失败）。</param>
+    /// <returns>true 表示找到了对应行并完成回写；false 表示未找到。</returns>
+    public bool ApplyCommandVerificationResult(string rowId, bool success)
+    {
+        if (string.IsNullOrEmpty(rowId))
+        {
+            return false;
+        }
+
+        var target = Versions.FirstOrDefault(row => string.Equals(row.Id, rowId, StringComparison.OrdinalIgnoreCase));
+        if (target is null)
+        {
+            return false;
+        }
+
+        // 失败：统一钳为"不可用"。同一 SDK 类型只允许一条"使用中"，由 catalog active 指针在下次刷新时自愈。
+        if (!success)
+        {
+            target.Status = "不可用";
+            target.Operation = "查看原因";
+            target.CanSwitch = false;
+            return true;
+        }
+
+        // 成功：原本就是"使用中"则保持；否则一律落到"可用"。
+        if (!string.Equals(target.Status, "使用中", StringComparison.Ordinal))
+        {
+            target.Status = "可用";
+            target.Operation = "切换";
+            target.CanSwitch = true;
+        }
+
+        return true;
+    }
+
+    /// <summary>
     /// 将 Core 行 DTO 转成当前 XAML 绑定的行模型。
     /// </summary>
     private static SdkVersionRow ToSdkVersionRow(SdkCatalogRow row)
@@ -291,35 +345,49 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     }
 
     /// <summary>
-    /// 用新行集合一次性替换 <see cref="Versions"/> 内容。
+    /// 用新行集合一次性替换 <see cref="Versions"/> 内容；同时管理行 PropertyChanged 订阅。
     /// </summary>
-    /// <param name="rows">本地已构建完成的全量行集合。</param>
     /// <remarks>
-    /// ObservableCollection 没有原生批量接口，逐项 Add 会按行触发 CollectionChanged。
-    /// 这里先 Clear（单次 Reset 通知），再顺序填充；由于该集合不直接绑定到任何控件
-    /// （ListView 绑定的是 VisibleVersions 缓存），填充阶段不会引发 UI 逐行重建，
-    /// 从而把刷新期间的通知开销压到最小。
+    /// 旧行需要先解订阅，避免委托回调进入已被 GC 的 ViewModel；新行订阅 Status 变更，
+    /// 触发可见集合即时重算（例如"可用→不可用"切换后，当前是"可用"过滤时该行立即消失）。
     /// </remarks>
     private void ReplaceVersions(IReadOnlyList<SdkVersionRow> rows)
     {
+        foreach (var row in Versions)
+        {
+            row.PropertyChanged -= OnVersionRowPropertyChanged;
+        }
+
         Versions.Clear();
         foreach (var row in rows)
         {
+            row.PropertyChanged += OnVersionRowPropertyChanged;
             Versions.Add(row);
         }
     }
 
     /// <summary>
-    /// 依据当前分类重算可见行缓存。
+    /// 单行 Status 变更联动：让过滤器 + 列表绑定即时反映新状态。
     /// </summary>
-    /// <remarks>
-    /// 集中在此处做一次 LINQ 过滤 + 数组分配，调用方随后只读取缓存，
-    /// 避免绑定层与空状态判断重复触发过滤计算。
-    /// </remarks>
+    private void OnVersionRowPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SdkVersionRow.Status))
+        {
+            return;
+        }
+
+        RebuildVisibleVersions();
+        NotifyVisibleStateChanged();
+    }
+
+    /// <summary>
+    /// 依据当前分类和状态筛选重算可见行缓存。
+    /// </summary>
     private void RebuildVisibleVersions()
     {
         visibleVersionsCache = Versions
             .Where(version => version.Category == selectedCategory)
+            .Where(version => SdkStatusFilterMatcher.Matches(version.Status, selectedStatusFilter))
             .ToArray();
     }
 

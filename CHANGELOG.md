@@ -5,6 +5,27 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.7] - 2026-06-11
+
+### 新增（Added）
+- **SDK 列表新增「路径」列**：插在「来源」与「状态」之间，显示完整安装路径。
+  - 单击路径文本即可**复制完整路径**到剪贴板，复制成功后顶部弹出 InfoBar 提示，3 秒自动消失。
+  - 列宽自适应剩余空间，路径过长被截断时鼠标悬浮显示完整路径 ToolTip。
+  - 视觉遵循 Fluent 2：默认次要文本色，hover 时切到品牌色。
+- **窗口最小尺寸约束**：通过 `WM_GETMINMAXINFO` 子类化拦截，最小尺寸 1280×800，防止用户拖小到内容截断。
+
+### 修复（Fixed）
+- **状态过滤无效**：右上角「状态」下拉切换「全部 / 使用中 / 可用 / 不可用」时列表内容不变。
+  - 引入 `DevSwitch.Core.SdkStatusFilter` 枚举 + `SdkStatusFilterMatcher` 纯函数。
+  - ViewModel 新增 `SelectedStatusFilter` 属性，按"分类 ∧ 状态"重算可见集；ComboBox `SelectionChanged`
+    接到此属性，每次切换实时刷新列表，默认选中「全部」。
+- **「检测当前」失败后状态徽章不同步**：命令验证失败（如 `java.exe 未能启动`）后徽章仍显示「可用」。
+  - `SdkVersionRow` 改为 `INotifyPropertyChanged`，Status / Operation / CanSwitch 三项可写并触发通知。
+  - 验证失败统一钳为「不可用」+ 操作改「查看原因」+ 禁用切换；当前过滤为「可用」时该行立即从列表消失。
+
+### 变更（Changed）
+- **默认窗口尺寸调整**：1320×860 → **1480×920**，足够容纳侧边导航 + 完整表格列（含新增路径列）+ 边距。
+
 ## [v0.2.6] - 2026-06-11
 
 ### 修复（Fixed）
@@ -71,6 +92,7 @@
 - GitHub 一键自更新：下载 → 校验 → 覆盖 → 重启，全程保护用户数据目录。
 - 灵活数据目录：便携 / 固定 C 盘 / 自定义三种模式，支持带进度迁移。
 
+[v0.2.7]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.7
 [v0.2.6]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.6
 [v0.2.5]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.5
 [v0.2.4]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.4

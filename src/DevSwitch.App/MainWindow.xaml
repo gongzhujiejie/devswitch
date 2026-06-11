@@ -747,10 +747,12 @@
                             </StackPanel>
 
                             <ComboBox
+                                x:Name="StatusFilterComboBox"
                                 Grid.Column="2"
                                 MinWidth="148"
-                                PlaceholderText="状态">
-                                <ComboBoxItem Content="全部" />
+                                PlaceholderText="状态"
+                                SelectionChanged="OnStatusFilterChanged">
+                                <ComboBoxItem Content="全部" IsSelected="True" />
                                 <ComboBoxItem Content="使用中" />
                                 <ComboBoxItem Content="可用" />
                                 <ComboBoxItem Content="不可用" />
@@ -796,7 +798,7 @@
                             <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="名称" />
                             <TextBlock Grid.Column="1" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="版本" />
                             <TextBlock Grid.Column="2" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="来源" />
-                            <TextBlock Grid.Column="3" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="路径" />
+                            <TextBlock x:Name="SdkPathColumnHeaderText" Grid.Column="3" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="路径" />
                             <TextBlock Grid.Column="4" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="状态" />
                             <TextBlock Grid.Column="5" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="操作" />
                         </Grid>
@@ -832,7 +834,7 @@
                                             </StackPanel>
                                             <TextBlock Grid.Column="1" Text="{Binding Version}" VerticalAlignment="Center" />
                                             <TextBlock Grid.Column="2" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="{Binding Source}" VerticalAlignment="Center" />
-                                            <TextBlock Grid.Column="3" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                                            <TextBlock Grid.Column="3" FontSize="14" Foreground="{StaticResource DevSwitchMutedTextBrush}" Loaded="OnSdkPathTextLoaded" MaxLines="1" Tag="{Binding Path}" Text="{Binding Path}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                                             <Border Grid.Column="4" Background="{StaticResource DevSwitchAccentSubtleBrush}" CornerRadius="12" HorizontalAlignment="Left" Padding="9,4" VerticalAlignment="Center">
                                                 <TextBlock FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="{Binding Status}" />
                                             </Border>
@@ -872,6 +874,15 @@
                             <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" HorizontalAlignment="Center" MaxWidth="360" Text="{Binding EmptyStateText}" TextAlignment="Center" TextWrapping="Wrap" />
                             <Button x:Name="EmptyAddLocalSdkButton" Click="OnAddLocalSdkClick" Content="添加本地 SDK" />
                         </StackPanel>
+                        <!-- 路径复制反馈：3 秒自动消失的 InfoBar，浮在表格顶部，不阻挡列表交互。 -->
+                        <InfoBar
+                            x:Name="PathCopiedInfoBar"
+                            Margin="36,0,36,0"
+                            HorizontalAlignment="Stretch"
+                            IsClosable="False"
+                            IsOpen="False"
+                            Severity="Success"
+                            VerticalAlignment="Top" />
                     </Grid>
                 </Grid>
 

@@ -1,13 +1,16 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using DevSwitch.App.ViewModels;
 using DevSwitch.Core;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Storage;
 using Windows.Storage.Pickers;
@@ -91,9 +94,14 @@ public sealed partial class MainWindow : Window
 
         RootGrid.Loaded += OnRootGridLoaded;
         Closed += OnMainWindowClosed;
-        // 默认窗口尺寸加大：原 1180x760 在 SDK 管理页右侧操作区（状态下拉/操作列）会被裁切，
-        // 放大到 1320x860 让工具栏与表格操作列完整可见，不需要用户手动拉伸。
-        ResizeWindow(1320, 860);
+        // 默认窗口尺寸调到 1480x920：
+        // - 侧边导航占 280px，主内容区 SDK 列表表格新增「路径」列后总宽度需求显著提升；
+        // - 1320 宽度下「路径/状态/操作」列会被裁切，1480 能容纳侧栏 + 表格全部列 + 24px 边距；
+        // - 高度 920 让工具栏 + 表头 + 数据行不出现垂直滚动条。
+        ResizeWindow(1480, 920);
+        // 注册最小尺寸约束（1280x800）：通过 SetWindowSubclass 拦截 WM_GETMINMAXINFO，
+        // 防止用户手动拖小窗口导致表格列再次被截断。AppWindow 本身不暴露 MinSize。
+        InstallMinimumSizeConstraint(1280, 800);
     }
 
     /// <summary>
@@ -128,6 +136,12 @@ public sealed partial class MainWindow : Window
             SettingsSubtitleText.Text = loc["settings.subtitle"];
             SettingsLanguageHeaderText.Text = loc["settings.language"];
             SettingsLanguageDescText.Text = loc["settings.language.desc"];
+        }
+
+        // SDK 表格「路径」列头。
+        if (SdkPathColumnHeaderText is not null)
+        {
+            SdkPathColumnHeaderText.Text = loc["sdk.column.path"];
         }
 
         // 语言状态行（当前语言：xxx）。
@@ -432,6 +446,8 @@ public sealed partial class MainWindow : Window
     {
         // 退订语言变更事件，避免单例长期持有已关闭窗口的引用导致泄漏。
         DevSwitch.App.Localization.LocalizationManager.Instance.LanguageChanged -= OnLanguageChanged;
+        // 移除 WM_GETMINMAXINFO 子类化钩子，确保 SubclassProc 委托可被回收，避免野指针。
+        UninstallMinimumSizeConstraint();
         windowLifetime.Cancel();
         windowLifetime.Dispose();
     }
@@ -855,6 +871,127 @@ public sealed partial class MainWindow : Window
         return AppWindow.GetFromWindowId(windowId);
     }
 
+    // ============== 路径列交互（Tapped 复制 + Hover 高亮 + ToolTip 完整路径 + InfoBar 反馈） ==============
+
+    // 路径列默认色（次要文本，对应 Fluent2 colorNeutralForeground2）。
+    private Brush? sdkPathDefaultBrush;
+    // 路径列 hover 高亮色（品牌色，对应 Fluent2 colorBrandForeground1，给予链接观感）。
+    private Brush? sdkPathHoverBrush;
+    // InfoBar 自动关闭计时器；与单个 InfoBar 实例共生，重复触发时复位 3 秒倒计时。
+    private DispatcherTimer? pathCopiedTimer;
+
+    /// <summary>
+    /// SDK 表格路径列单元格 TextBlock 加载完成时挂载交互事件。
+    /// 由 DataTemplate 内 TextBlock.Loaded 调用：每个数据行的路径文本一旦进入可视化树即注册一次。
+    /// 通过 Tag 携带绑定路径（DataContext 在虚拟化场景下会重用，但 Tag 的 Binding 由模板每次重新求值，可靠）。
+    /// </summary>
+    private void OnSdkPathTextLoaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not TextBlock textBlock)
+        {
+            return;
+        }
+
+        // 懒初始化 brush：首次有路径单元格出现时再读资源，避免构造函数顺序耦合。
+        sdkPathDefaultBrush ??= (Brush)Application.Current.Resources["DevSwitchMutedTextBrush"];
+        sdkPathHoverBrush ??= (Brush)Application.Current.Resources["DevSwitchAccentTextBrush"];
+
+        // 初版策略：一律挂 ToolTip（系统会在文本完整可见时按需自动隐藏行为由用户设置决定，
+        // 简单可靠；后续若有体验诉求可再切换为按截断条件智能挂载）。
+        var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
+        ToolTipService.SetToolTip(textBlock, !string.IsNullOrEmpty(textBlock.Text) ? textBlock.Text : loc["sdk.path.tooltip"]);
+
+        // 防止重复订阅：模板复用时 Loaded 可能被重复触发。
+        textBlock.PointerEntered -= OnSdkPathPointerEntered;
+        textBlock.PointerExited -= OnSdkPathPointerExited;
+        textBlock.Tapped -= OnSdkPathTapped;
+        textBlock.PointerEntered += OnSdkPathPointerEntered;
+        textBlock.PointerExited += OnSdkPathPointerExited;
+        textBlock.Tapped += OnSdkPathTapped;
+    }
+
+    /// <summary>
+    /// 鼠标进入路径文本：切到品牌色高亮，营造链接质感。
+    /// </summary>
+    private void OnSdkPathPointerEntered(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is TextBlock tb && sdkPathHoverBrush is not null)
+        {
+            tb.Foreground = sdkPathHoverBrush;
+        }
+    }
+
+    /// <summary>
+    /// 鼠标移出路径文本：还原次要文本颜色。
+    /// </summary>
+    private void OnSdkPathPointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        if (sender is TextBlock tb && sdkPathDefaultBrush is not null)
+        {
+            tb.Foreground = sdkPathDefaultBrush;
+        }
+    }
+
+    /// <summary>
+    /// 点击路径文本：复制完整路径到剪贴板并显示 InfoBar 成功提示。
+    /// 路径优先取 Tag（DataTemplate 中通过 {Binding Path} 锁定），次取当前 Text。
+    /// </summary>
+    private void OnSdkPathTapped(object sender, TappedRoutedEventArgs e)
+    {
+        if (sender is not TextBlock tb)
+        {
+            return;
+        }
+
+        string? path = tb.Tag as string ?? tb.Text;
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            return;
+        }
+
+        // 写入剪贴板：DataPackage + SetText 是 WinUI3 桌面端的标准做法。
+        var package = new DataPackage();
+        package.SetText(path);
+        Clipboard.SetContent(package);
+
+        ShowPathCopiedInfoBar();
+    }
+
+    /// <summary>
+    /// 显示「已复制路径」InfoBar（Severity=Success），3 秒后自动关闭。
+    /// 重复复制会重置倒计时，让用户有时间继续阅读。
+    /// </summary>
+    private void ShowPathCopiedInfoBar()
+    {
+        if (PathCopiedInfoBar is null)
+        {
+            return;
+        }
+
+        var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
+        PathCopiedInfoBar.Message = loc["sdk.path.copied"];
+        PathCopiedInfoBar.IsOpen = true;
+
+        // 复位 3 秒倒计时：若已存在计时器先停掉，再重新启动，避免多个 Tick 同时关闭。
+        if (pathCopiedTimer is null)
+        {
+            pathCopiedTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+            pathCopiedTimer.Tick += (s, _) =>
+            {
+                pathCopiedTimer?.Stop();
+                if (PathCopiedInfoBar is not null)
+                {
+                    PathCopiedInfoBar.IsOpen = false;
+                }
+            };
+        }
+        else
+        {
+            pathCopiedTimer.Stop();
+        }
+        pathCopiedTimer.Start();
+    }
+
     /// <summary>
     /// 通过 Windows App SDK 的 AppWindow 设置桌面窗口尺寸。
     /// 如果窗口句柄尚不可用，则保持系统默认尺寸，避免影响空壳启动。
@@ -866,4 +1003,95 @@ public sealed partial class MainWindow : Window
         AppWindow appWindow = GetAppWindow();
         appWindow.Resize(new SizeInt32(width, height));
     }
+
+    // ====== 最小尺寸约束（拦截 WM_GETMINMAXINFO） ======
+    // AppWindow 不直接提供 MinSize 属性。WinUI 3 桌面窗口本质仍是 HWND，
+    // 因此通过 comctl32 的 SetWindowSubclass 注入子类过程，在 WM_GETMINMAXINFO 中
+    // 改写 ptMinTrackSize，即可阻止用户拖小窗口导致表格列被截断。
+
+    private const int WM_GETMINMAXINFO = 0x0024;
+
+    // 子类化标识 ID：随便选一个不会与系统冲突的常量即可。
+    private const uint MinSizeSubclassId = 0xD75BC400;
+
+    // 持有委托引用，防止被 GC 回收导致回调进入野指针。
+    private SUBCLASSPROC? minSizeSubclassProc;
+    private nint minSizeSubclassHwnd;
+    private int minSizeWidthPx;
+    private int minSizeHeightPx;
+
+    /// <summary>
+    /// 安装最小尺寸约束。WM_GETMINMAXINFO 单位为物理像素，这里直接传入像素值。
+    /// </summary>
+    /// <param name="minWidth">最小宽度（物理像素）。</param>
+    /// <param name="minHeight">最小高度（物理像素）。</param>
+    private void InstallMinimumSizeConstraint(int minWidth, int minHeight)
+    {
+        minSizeWidthPx = minWidth;
+        minSizeHeightPx = minHeight;
+        minSizeSubclassHwnd = WindowNative.GetWindowHandle(this);
+        // 必须把委托存在字段里，否则会被 GC 回收。
+        minSizeSubclassProc = MinSizeSubclassProc;
+        SetWindowSubclass(minSizeSubclassHwnd, minSizeSubclassProc, MinSizeSubclassId, 0);
+    }
+
+    /// <summary>
+    /// 卸载最小尺寸约束，避免窗口关闭后委托被回收引发回调失败。
+    /// </summary>
+    private void UninstallMinimumSizeConstraint()
+    {
+        if (minSizeSubclassProc is not null && minSizeSubclassHwnd != 0)
+        {
+            RemoveWindowSubclass(minSizeSubclassHwnd, minSizeSubclassProc, MinSizeSubclassId);
+            minSizeSubclassProc = null;
+            minSizeSubclassHwnd = 0;
+        }
+    }
+
+    /// <summary>
+    /// 子类窗口过程：拦截 WM_GETMINMAXINFO，把 ptMinTrackSize 改写为期望的最小尺寸。
+    /// 其他消息一律透传给 DefSubclassProc 走默认链。
+    /// </summary>
+    private nint MinSizeSubclassProc(nint hWnd, uint msg, nint wParam, nint lParam, uint subclassId, nint refData)
+    {
+        if (msg == WM_GETMINMAXINFO && lParam != 0)
+        {
+            // MINMAXINFO 内含 5 个 POINT，ptMinTrackSize 是第 4 个（索引 3）。
+            MINMAXINFO info = Marshal.PtrToStructure<MINMAXINFO>(lParam);
+            info.ptMinTrackSize.X = minSizeWidthPx;
+            info.ptMinTrackSize.Y = minSizeHeightPx;
+            Marshal.StructureToPtr(info, lParam, fDeleteOld: false);
+            return 0;
+        }
+
+        return DefSubclassProc(hWnd, msg, wParam, lParam);
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MINMAXINFO
+    {
+        public POINT ptReserved;
+        public POINT ptMaxSize;
+        public POINT ptMaxPosition;
+        public POINT ptMinTrackSize;
+        public POINT ptMaxTrackSize;
+    }
+
+    private delegate nint SUBCLASSPROC(nint hWnd, uint uMsg, nint wParam, nint lParam, uint uIdSubclass, nint dwRefData);
+
+    [DllImport("comctl32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool SetWindowSubclass(nint hWnd, SUBCLASSPROC pfnSubclass, uint uIdSubclass, nint dwRefData);
+
+    [DllImport("comctl32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool RemoveWindowSubclass(nint hWnd, SUBCLASSPROC pfnSubclass, uint uIdSubclass);
+
+    [DllImport("comctl32.dll", CharSet = CharSet.Unicode)]
+    private static extern nint DefSubclassProc(nint hWnd, uint uMsg, nint wParam, nint lParam);
 }
