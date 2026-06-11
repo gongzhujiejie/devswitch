@@ -5,6 +5,16 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.6] - 2026-06-11
+
+### 修复（Fixed）
+- **彻底清理 `data\updates` 历史更新包**：v0.2.5 的"下次更新前清理"策略仍会让最近一次的更新包
+  与历史发布前的旧目录长期残留（如 v0.2.0、v0.2.4、v0.2.5）。本版改为**应用启动时立即清空**，
+  此时 updater 必然已退出、所有更新文件不再被任何进程占用，可一次性释放。
+  叠加自更新流程内部的"开始前清理"，形成双层保险，磁盘占用稳定为 0。
+- 把清理逻辑下沉到 `DevSwitch.Core/DataRootMaintenance`，并补充 5 个单元测试覆盖
+  「多版本残留清空」「目录不存在」「空 dataRoot」「不波及同级 config/sdks/logs」「底层 PurgeDirectoryContents」。
+
 ## [v0.2.5] - 2026-06-11
 
 ### 新增（Added）
@@ -61,5 +71,6 @@
 - GitHub 一键自更新：下载 → 校验 → 覆盖 → 重启，全程保护用户数据目录。
 - 灵活数据目录：便携 / 固定 C 盘 / 自定义三种模式，支持带进度迁移。
 
+[v0.2.6]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.6
 [v0.2.5]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.5
 [v0.2.4]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.4

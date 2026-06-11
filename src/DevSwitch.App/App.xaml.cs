@@ -77,6 +77,20 @@ public partial class App : Application
 
             StartupLog.Write($"Resolved data root: {dataRoot}");
 
+            // 启动即清理：自更新留下的 data\updates\<version>\ 暂存仅在「下载→覆盖→重启」期间需要，
+            // 主程序此刻已重启，意味着 updater 必然已退出，所有历史版本的更新包都可安全释放，
+            // 避免磁盘占用随版本累积。清理失败不阻塞启动（DataRootMaintenance 内部已吞异常）。
+            try
+            {
+                DataRootMaintenance.PurgeUpdatesStagingDirectory(dataRoot);
+                StartupLog.Write("Updates staging directory purged.");
+            }
+            catch (Exception purgeEx)
+            {
+                // 兜底：理论上 PurgeUpdatesStagingDirectory 已吞所有 IO 异常；这里再加一层保险。
+                StartupLog.Write("Purge updates staging failed (ignored).", purgeEx);
+            }
+
             // 组合根：集中创建后端服务工厂与共享依赖（catalog store、HttpClient、helper 路径解析）。
             var appServices = new AppServices(dataRoot);
             var catalogProvider = new FileSdkCatalogProvider(dataRoot, appServices.CatalogStore);
