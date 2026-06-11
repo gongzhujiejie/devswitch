@@ -1,4 +1,4 @@
-﻿# 文件用途：CI（GitHub Actions）专用的 DevSwitch 构建打包脚本。
+# 文件用途：CI（GitHub Actions）专用的 DevSwitch 构建打包脚本。
 #   与本地 build-release-package.ps1 不同：不写死本地路径，使用 PATH 中的 dotnet / g++，
 #   接受版本参数（来自 git tag），产出 DevSwitch-win10-x64.zip 与同名 .sha256。
 # 创建/修改日期：2026-06-11
@@ -68,6 +68,53 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
     $publishArgs += ('-p:Version=' + $Version)
     $publishArgs += ('-p:AssemblyVersion=' + $Version + '.0')
     $publishArgs += ('-p:FileVersion=' + $Version + '.0')
+}
+
+# Windows App SDK 的 MrtCore.PriGen.targets 会从
+#   $(MSBuildExtensionsPath)\Microsoft\VisualStudio\v$(VisualStudioVersion)\AppxPackage\Microsoft.Build.Packaging.Pri.Tasks.dll
+# 加载 PRI 生成任务。用 `dotnet publish` 时该路径指向 .NET SDK 目录，而这个 DLL 只随 Visual Studio
+# 的 MSIX/Appx 打包工具提供，SDK 目录里没有，于是报 MSB4062。
+# 解决：用 vswhere 找到 runner 上的 VS 安装，定位其中真实存在该 DLL 的 AppxPackage 目录，
+# 通过 -p:AppxMSBuildToolsPath 覆盖，让 UsingTask 能加载到正确程序集。
+function Resolve-AppxToolsPath {
+    $dllName = 'Microsoft.Build.Packaging.Pri.Tasks.dll'
+
+    # 1) 优先用 vswhere 定位 VS 安装根，在其中递归找真实存在该 DLL 的 AppxPackage 目录。
+    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    if (Test-Path $vswhere) {
+        $vsRoots = & $vswhere -latest -products * -property installationPath 2>$null
+        foreach ($vsRoot in @($vsRoots)) {
+            if ([string]::IsNullOrWhiteSpace($vsRoot)) { continue }
+            $found = Get-ChildItem -Path $vsRoot -Recurse -Filter $dllName -ErrorAction SilentlyContinue |
+                Where-Object { $_.DirectoryName -match 'AppxPackage' } |
+                Select-Object -First 1
+            if ($found) { return $found.DirectoryName }
+        }
+    }
+
+    # 2) 退回：扫描常见安装根下的 VS MSBuild AppxPackage 目录。
+    $roots = @(
+        (Join-Path $env:ProgramFiles 'Microsoft Visual Studio'),
+        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio')
+    ) | Where-Object { $_ -and (Test-Path $_) }
+    foreach ($root in $roots) {
+        $found = Get-ChildItem -Path $root -Recurse -Filter $dllName -ErrorAction SilentlyContinue |
+            Where-Object { $_.DirectoryName -match 'AppxPackage' } |
+            Select-Object -First 1
+        if ($found) { return $found.DirectoryName }
+    }
+
+    return $null
+}
+
+$appxToolsPath = Resolve-AppxToolsPath
+if ($appxToolsPath) {
+    # 末尾保留反斜杠：targets 中 $(AppxMSBuildToolsPath)Microsoft.Build.AppxPackage.dll 未额外加分隔符。
+    $publishArgs += ('-p:AppxMSBuildToolsPath=' + $appxToolsPath.TrimEnd('\') + '\')
+    Write-Output ("APPX_TOOLS=" + $appxToolsPath)
+}
+else {
+    Write-Warning 'AppxMSBuildToolsPath not resolved via vswhere; PRI task may fail to load.'
 }
 
 # 先显式 restore，再 publish（同进程 & 调用，日志直接进 CI 输出，便于排错）。
