@@ -906,8 +906,16 @@ internal sealed class AppSelfUpdateService
         }
 
         // 暂存目录：dataRoot\updates\<version>\，避免污染安装目录与用户数据。
+        // NOTE: 更新包仅用于「下载→校验→解压→覆盖」这一次性流程，覆盖完成后不再需要保留。
+        //       此前每个版本都会在 updates 下留下 zip + extracted 整套且从不清理，日积月累占用大量磁盘。
+        //       这里在开始本次更新前，先清空整个 updates 目录（含所有历史版本残留）。
+        //       之所以放在「下次更新开始时」清理、而非「本次结束时」清理：因为外部 updater 是在主程序退出后
+        //       才异步从 extracted 复制文件，若本次结束就删会删掉 updater 仍要读取的源文件。
+        string updatesRoot = Path.Combine(dataRoot, "updates");
+        PurgeDirectoryContents(updatesRoot);
+
         string safeVersion = MakeSafeName(plan.Version);
-        string updateRoot = Path.Combine(dataRoot, "updates", safeVersion);
+        string updateRoot = Path.Combine(updatesRoot, safeVersion);
         string extractedDir = Path.Combine(updateRoot, "extracted");
         Directory.CreateDirectory(updateRoot);
 
@@ -1041,6 +1049,48 @@ internal sealed class AppSelfUpdateService
         var invalid = Path.GetInvalidFileNameChars();
         var chars = version.Select(c => invalid.Contains(c) ? '_' : c).ToArray();
         return new string(chars);
+    }
+
+    /// <summary>
+    /// 清空目录下的所有内容（文件与子目录），但保留目录本身。目录不存在时静默返回。
+    /// </summary>
+    /// <remarks>
+    /// 用于在新一轮自更新前清理 updates 暂存目录里的历史残留，避免磁盘占用持续增长。
+    /// 容错设计：逐项删除，单项失败（例如被占用）只跳过该项、不抛异常，确保清理尽力而为、
+    /// 绝不因清理失败而中断后续更新流程。
+    /// </remarks>
+    private static void PurgeDirectoryContents(string directory)
+    {
+        if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(directory))
+        {
+            try
+            {
+                // 清除只读属性，避免删除被拒。
+                File.SetAttributes(file, FileAttributes.Normal);
+                File.Delete(file);
+            }
+            catch
+            {
+                // 单个文件删除失败（占用/权限）不影响整体清理，跳过即可。
+            }
+        }
+
+        foreach (var subDir in Directory.EnumerateDirectories(directory))
+        {
+            try
+            {
+                Directory.Delete(subDir, recursive: true);
+            }
+            catch
+            {
+                // 子目录删除失败同样跳过，最大化清理已能释放的空间。
+            }
+        }
     }
 }
 
