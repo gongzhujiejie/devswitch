@@ -23,6 +23,32 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      # GitHub runner 同时预装 .NET 10；若不固定 SDK，dotnet 会选择最新 10.0.300，
+      # Windows App SDK 1.5 的 PRI 构建任务会去找不存在的 v18.0 AppxPackage 目录。
+      - name: Pin .NET 8 SDK for Windows App SDK
+        shell: pwsh
+        run: |
+          $sdk = dotnet --list-sdks |
+            ForEach-Object { ($_ -split '\s+')[0] } |
+            Where-Object { $_ -like '8.0.*' } |
+            Sort-Object { [version]$_ } |
+            Select-Object -Last 1
+          if (-not $sdk) {
+            throw 'No .NET 8 SDK found after actions/setup-dotnet.'
+          }
+
+          $globalJson = @{
+            sdk = @{
+              version = $sdk
+              rollForward = 'latestFeature'
+              allowPrerelease = $false
+            }
+          } | ConvertTo-Json -Depth 3
+          $globalJson | Set-Content -Path global.json -Encoding utf8
+
+          Write-Host "Pinned .NET SDK: $sdk"
+          dotnet --version
+
       # windows-latest 自带 MinGW g++（C:\mingw64\bin），确保它在 PATH 中。
       - name: Ensure MinGW g++ on PATH
         shell: pwsh
