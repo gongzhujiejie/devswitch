@@ -70,9 +70,13 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
     $publishArgs += ('-p:FileVersion=' + $Version + '.0')
 }
 
-# 用 Start-Process 起 dotnet（与本地打包脚本一致）。
-$publishProc = Start-Process -FilePath $dotnet -WorkingDirectory $repoRoot -ArgumentList $publishArgs -NoNewWindow -Wait -PassThru
-$publishExit = $publishProc.ExitCode
+# 先显式 restore，再 publish（同进程 & 调用，日志直接进 CI 输出，便于排错）。
+& $dotnet restore $csproj -p:Platform=x64
+Write-Output ("RESTORE_EXIT=" + $LASTEXITCODE)
+
+& $dotnet @publishArgs
+$publishExit = $LASTEXITCODE
+Write-Output ("PUBLISH_EXIT=" + $publishExit)
 
 # 以「产物是否生成」为最终判据：WinUI 的 PRI 子任务个别环境会返回非 0，
 # 但只要 DevSwitch.App.dll 已产出即视为成功（与本地脚本同思路，CI 上更稳）。
