@@ -60,12 +60,32 @@ function Invoke-NativeProcess {
     )
 
     $argumentLine = Join-ProcessArguments $Arguments
-    $process = Start-Process -FilePath $FilePath -ArgumentList $argumentLine -NoNewWindow -Wait -PassThru
-    if ($null -eq $process.ExitCode) { return 0 }
+    $startInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $startInfo.FileName = $FilePath
+    $startInfo.Arguments = $argumentLine
+    $startInfo.UseShellExecute = $false
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo = $startInfo
+    [void]$process.Start()
+    $process.WaitForExit()
     return $process.ExitCode
 }
 
 $dotnet = Resolve-Tool 'dotnet'
+
+function Invoke-Dotnet {
+    param([string[]]$Arguments)
+
+    if ($env:GITHUB_ACTIONS -eq 'true') {
+        & $dotnet @Arguments
+        if ($null -eq $LASTEXITCODE) { return 0 }
+        return $LASTEXITCODE
+    }
+
+    return Invoke-NativeProcess -FilePath $dotnet -Arguments $Arguments
+}
+
 $gpp = Resolve-Tool 'g++'
 Write-Output "DOTNET=$dotnet"
 Write-Output "GPP=$gpp"
@@ -183,13 +203,13 @@ $restoreArgs = @(
     '-r', 'win10-x64',
     '-p:PublishReadyToRun=true'
 )
-$restoreExit = Invoke-NativeProcess -FilePath $dotnet -Arguments $restoreArgs
+$restoreExit = Invoke-Dotnet -Arguments $restoreArgs
 Write-Output ("RESTORE_EXIT=" + $restoreExit)
 if ($restoreExit -ne 0) {
     throw ('dotnet restore failed (exit=' + $restoreExit + ').')
 }
 
-$publishExit = Invoke-NativeProcess -FilePath $dotnet -Arguments $publishArgs
+$publishExit = Invoke-Dotnet -Arguments $publishArgs
 Write-Output ("PUBLISH_EXIT=" + $publishExit)
 
 # 以「产物是否生成」为最终判据：WinUI 的 PRI 子任务个别环境会返回非 0，
