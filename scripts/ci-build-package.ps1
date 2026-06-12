@@ -78,9 +78,11 @@ function Invoke-Dotnet {
     param([string[]]$Arguments)
 
     if ($env:GITHUB_ACTIONS -eq 'true') {
-        & $dotnet @Arguments
-        if ($null -eq $LASTEXITCODE) { return 0 }
-        return $LASTEXITCODE
+        $output = & $dotnet @Arguments 2>&1
+        $nativeExit = $LASTEXITCODE
+        foreach ($line in $output) { Write-Host $line }
+        if ($null -eq $nativeExit) { return 0 }
+        return $nativeExit
     }
 
     return Invoke-NativeProcess -FilePath $dotnet -Arguments $Arguments
