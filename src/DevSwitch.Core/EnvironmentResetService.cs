@@ -214,7 +214,7 @@ public sealed class EnvironmentResetService
             throw new ArgumentException("Data root is required.", nameof(dataRoot));
         }
 
-        var types = new[] { SdkType.Java, SdkType.Maven, SdkType.Node, SdkType.Go };
+        var types = new[] { SdkType.Java, SdkType.Maven, SdkType.Node, SdkType.Go, SdkType.Rust };
         return types.Select(type => (type, currentPathProvider.GetCurrentPath(dataRoot, type))).ToArray();
     }
 
@@ -344,6 +344,7 @@ public sealed class EnvironmentResetService
         return string.IsNullOrWhiteSpace(active.Java)
             && string.IsNullOrWhiteSpace(active.Maven)
             && string.IsNullOrWhiteSpace(active.Node)
-            && string.IsNullOrWhiteSpace(active.Go);
+            && string.IsNullOrWhiteSpace(active.Go)
+            && string.IsNullOrWhiteSpace(active.Rust);
     }
 }

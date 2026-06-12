@@ -77,6 +77,29 @@ public static class SdkStatusFilterMatcher
     }
 
     /// <summary>
+    /// 把 ComboBoxItem.Tag 的稳定值（All / InUse / Available / Unavailable）解析为枚举。
+    /// 未知值统一回退到 <see cref="SdkStatusFilter.All"/>，避免本地化后的 Content 影响业务过滤。
+    /// </summary>
+    /// <param name="tag">下拉项的稳定 Tag；可为 null。</param>
+    /// <returns>解析后的过滤枚举。</returns>
+    public static SdkStatusFilter ParseFromComboBoxTag(string? tag)
+    {
+        if (string.IsNullOrWhiteSpace(tag))
+        {
+            return SdkStatusFilter.All;
+        }
+
+        return tag.Trim() switch
+        {
+            "All" => SdkStatusFilter.All,
+            "InUse" => SdkStatusFilter.InUse,
+            "Available" => SdkStatusFilter.Available,
+            "Unavailable" => SdkStatusFilter.Unavailable,
+            _ => SdkStatusFilter.All,
+        };
+    }
+
+    /// <summary>
     /// 把 ComboBox 选中的中文文案（"全部" / "使用中" / "可用" / "不可用"）解析为枚举。
     /// 未知文案统一回退到 <see cref="SdkStatusFilter.All"/>，保持与 PlaceholderText 默认行为一致。
     /// </summary>

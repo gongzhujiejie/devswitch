@@ -80,12 +80,13 @@ public enum SdkRecordStatus
 /// <param name="Maven">当前 Maven SDK 记录 ID。</param>
 /// <param name="Node">当前 Node.js SDK 记录 ID。</param>
 /// <param name="Go">当前 Go SDK 记录 ID。</param>
-public sealed record ActiveSdkSet(string? Java, string? Maven, string? Node, string? Go)
+/// <param name="Rust">当前 Rust SDK 记录 ID。</param>
+public sealed record ActiveSdkSet(string? Java, string? Maven, string? Node, string? Go, string? Rust = null)
 {
     /// <summary>
     /// 创建所有类型均未选中的 active 集合。
     /// </summary>
-    public static ActiveSdkSet Empty { get; } = new(Java: null, Maven: null, Node: null, Go: null);
+    public static ActiveSdkSet Empty { get; } = new(Java: null, Maven: null, Node: null, Go: null, Rust: null);
 }
 
 /// <summary>

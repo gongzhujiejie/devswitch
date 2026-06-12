@@ -51,6 +51,7 @@ public static partial class SdkVersionResolver
             SdkType.Go => ResolveGo(rootPath),
             SdkType.Maven => ParseVersionFromDirectoryName(SdkType.Maven, GetLeafName(rootPath)),
             SdkType.Node => ParseVersionFromDirectoryName(SdkType.Node, GetLeafName(rootPath)),
+            SdkType.Rust => ParseVersionFromDirectoryName(SdkType.Rust, GetLeafName(rootPath)),
             _ => null,
         };
 

@@ -89,6 +89,7 @@ public sealed class DownloadDialog : ContentDialog
         sdkTypeCombo.Items.Add(new ComboBoxItem { Content = "Maven", Tag = "Maven" });
         sdkTypeCombo.Items.Add(new ComboBoxItem { Content = "Node.js", Tag = "Node.js" });
         sdkTypeCombo.Items.Add(new ComboBoxItem { Content = "Go", Tag = "Go" });
+        sdkTypeCombo.Items.Add(new ComboBoxItem { Content = "Rust", Tag = "Rust" });
         SelectByTag(sdkTypeCombo, initialCategory, fallbackIndex: 0);
 
         archCombo = new ComboBox { MinWidth = 200, HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -289,7 +290,14 @@ public sealed class DownloadDialog : ContentDialog
                 installRootDir,
                 SanitizeFolder($"{selected.Distribution}-{selected.Version}-{selected.Architecture}"));
 
-            // 构建下载任务。
+            // 构建下载任务。若源只提供 ChecksumUrl，则先读取校验文件并解析 SHA256，确保完成阶段仍能做完整性校验。
+            string? expectedSha256 = selected.Sha256;
+            if (string.IsNullOrWhiteSpace(expectedSha256) && !string.IsNullOrWhiteSpace(selected.ChecksumUrl))
+            {
+                statusText.Text = "正在读取校验信息……";
+                expectedSha256 = ParseSha256Checksum(await appServices.FetchTextAsync(selected.ChecksumUrl!, downloadCts.Token));
+            }
+
             var task = DownloadTask.CreateQueued(
                 id: Guid.NewGuid().ToString("N"),
                 sdkType: selected.SdkType,
@@ -297,7 +305,7 @@ public sealed class DownloadDialog : ContentDialog
                 distribution: selected.Distribution,
                 arch: selected.Architecture,
                 url: selected.DownloadUrl,
-                expectedSha256: selected.Sha256);
+                expectedSha256: expectedSha256);
 
             // 进度回调：节流后回到 UI 线程更新进度条。
             var progress = new Progress<DownloadProgress>(p =>
@@ -335,8 +343,17 @@ public sealed class DownloadDialog : ContentDialog
             statusText.Text = "正在校验并解压……";
             downloadProgress.IsIndeterminate = true;
 
-            var pipeline = appServices.CreateCompletionPipeline();
-            var completion = await pipeline.CompleteAsync(downloaded, archivePath, installDir, downloadCts.Token);
+            DownloadCompletionResult completion;
+            if (selected.SdkType == SdkType.Rust && string.Equals(selected.Distribution, "rustup", StringComparison.OrdinalIgnoreCase))
+            {
+                var rustupPipeline = appServices.CreateRustupCompletionPipeline();
+                completion = await rustupPipeline.CompleteAsync(downloaded, archivePath, installDir, downloadCts.Token);
+            }
+            else
+            {
+                var pipeline = appServices.CreateCompletionPipeline();
+                completion = await pipeline.CompleteAsync(downloaded, archivePath, installDir, downloadCts.Token);
+            }
 
             if (completion.Task.Status == DownloadStatus.Completed)
             {
@@ -525,7 +542,8 @@ public sealed class DownloadDialog : ContentDialog
         "Maven" => SdkType.Maven,
         "Node.js" => SdkType.Node,
         "Go" => SdkType.Go,
-        _ => SdkType.Java,
+        "Rust" => SdkType.Rust,
+        _ => SdkType.Unknown,
     };
 
     private static SdkArchitecture ParseArch(string tag) => tag switch
@@ -534,6 +552,29 @@ public sealed class DownloadDialog : ContentDialog
         "arm64" => SdkArchitecture.Arm64,
         _ => SdkArchitecture.X64,
     };
+
+    /// <summary>
+    /// 从 .sha256 文件内容中解析第一个 64 位十六进制 SHA256 字符串。
+    /// </summary>
+    private static string? ParseSha256Checksum(string? content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return null;
+        }
+
+        // 常见格式："<sha256>  rustup-init.exe" 或仅一行 sha256；按空白切分即可兼容。
+        var tokens = content.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        foreach (var token in tokens)
+        {
+            if (token.Length == 64 && token.All(Uri.IsHexDigit))
+            {
+                return token.ToLowerInvariant();
+            }
+        }
+
+        return null;
+    }
 
     /// <summary>
     /// 根据下载 URL 推断安装包文件名，缺失时回退到合成名。

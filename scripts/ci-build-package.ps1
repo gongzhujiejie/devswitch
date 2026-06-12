@@ -1,4 +1,4 @@
-# 文件用途：CI（GitHub Actions）专用的 DevSwitch 构建打包脚本。
+﻿# 文件用途：CI（GitHub Actions）专用的 DevSwitch 构建打包脚本。
 #   与本地 build-release-package.ps1 不同：不写死本地路径，使用 PATH 中的 dotnet / g++，
 #   接受版本参数（来自 git tag），产出 DevSwitch-win10-x64.zip 与同名 .sha256。
 # 创建/修改日期：2026-06-11
@@ -12,18 +12,57 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Git Bash / 精简 shell 启动 powershell.exe 时可能缺少 ProgramFiles 系列环境变量，
+# NuGet/MSBuild targets 会依赖这些变量拼装路径；缺失时会报 Value cannot be null(path1)。
+if (-not $env:ProgramFiles) { $env:ProgramFiles = 'C:\Program Files' }
+if (-not [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) { Set-Item -Path 'Env:ProgramFiles(x86)' -Value 'C:\Program Files (x86)' }
+if (-not $env:SystemRoot) { $env:SystemRoot = 'C:\Windows' }
+if (-not $env:windir) { $env:windir = $env:SystemRoot }
+if (-not $env:USERPROFILE) { $env:USERPROFILE = [Environment]::GetFolderPath('UserProfile') }
+if (-not $env:LOCALAPPDATA) { $env:LOCALAPPDATA = [Environment]::GetFolderPath('LocalApplicationData') }
+if (-not $env:APPDATA) { $env:APPDATA = [Environment]::GetFolderPath('ApplicationData') }
+if (-not $env:TEMP) { $env:TEMP = [IO.Path]::GetTempPath().TrimEnd([IO.Path]::DirectorySeparatorChar) }
+if (-not $env:TMP) { $env:TMP = $env:TEMP }
+
 # 用脚本自身位置定位仓库根（scripts/ 的上一级）。
 $repoRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $repoRoot
 Write-Output "REPO_ROOT=$repoRoot"
 
 # 解析工具：优先 PATH 中的裸名，回退带 .exe，最后回退裸名交系统解析（CI runner 一定可用）。
-function Resolve-Tool([string]$name) {
+function Resolve-Tool {
+    param([string]$name)
+
     $cmd = Get-Command $name -ErrorAction SilentlyContinue
     if ($cmd) { return $cmd.Source }
     $cmdExe = Get-Command ($name + '.exe') -ErrorAction SilentlyContinue
     if ($cmdExe) { return $cmdExe.Source }
     return $name
+}
+
+function Join-ProcessArguments {
+    param([string[]]$Arguments)
+
+    return ($Arguments | ForEach-Object {
+        if ($_ -match '[\s"]') {
+            '"' + ($_ -replace '"', '\"') + '"'
+        }
+        else {
+            $_
+        }
+    }) -join ' '
+}
+
+function Invoke-NativeProcess {
+    param(
+        [string]$FilePath,
+        [string[]]$Arguments
+    )
+
+    $argumentLine = Join-ProcessArguments $Arguments
+    $process = Start-Process -FilePath $FilePath -ArgumentList $argumentLine -NoNewWindow -Wait -PassThru
+    if ($null -eq $process.ExitCode) { return 0 }
+    return $process.ExitCode
 }
 
 $dotnet = Resolve-Tool 'dotnet'
@@ -63,7 +102,19 @@ $publishDir = Join-Path $repoRoot 'artifacts\package\DevSwitch-win10-x64'
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
 
 $csproj = Join-Path $repoRoot 'src\DevSwitch.App\DevSwitch.App.csproj'
-$publishArgs = @('publish', $csproj, '--configuration', 'Release', '-p:Platform=x64', '-p:NodeReuse=false', '--output', $publishDir)
+$publishArgs = @(
+    'publish', $csproj,
+    '--configuration', 'Release',
+    # ReadyToRun 必须绑定具体 RID；publish 复用显式 restore 的 assets，避免隐式 restore 丢参数。
+    '--runtime', 'win10-x64',
+    '--no-restore',
+    '-p:Platform=x64',
+    '-p:UseRidGraph=true',
+    '-p:NodeReuse=false',
+    # 发布包启用 ReadyToRun，降低用户首次启动时的 JIT 成本；包体略增但换取更快冷启动。
+    '-p:PublishReadyToRun=true',
+    '--output', $publishDir
+)
 if (-not [string]::IsNullOrWhiteSpace($Version)) {
     $publishArgs += ('-p:Version=' + $Version)
     $publishArgs += ('-p:AssemblyVersion=' + $Version + '.0')
@@ -78,9 +129,12 @@ if (-not [string]::IsNullOrWhiteSpace($Version)) {
 # 通过 -p:AppxMSBuildToolsPath 覆盖，让 UsingTask 能加载到正确程序集。
 function Resolve-AppxToolsPath {
     $dllName = 'Microsoft.Build.Packaging.Pri.Tasks.dll'
+    $programFiles = if ($env:ProgramFiles) { $env:ProgramFiles } else { 'C:\Program Files' }
+    $programFilesX86Env = [Environment]::GetEnvironmentVariable('ProgramFiles(x86)')
+    $programFilesX86 = if ($programFilesX86Env) { $programFilesX86Env } else { 'C:\Program Files (x86)' }
 
     # 1) 优先用 vswhere 定位 VS 安装根，在其中递归找真实存在该 DLL 的 AppxPackage 目录。
-    $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+    $vswhere = Join-Path $programFilesX86 'Microsoft Visual Studio\Installer\vswhere.exe'
     if (Test-Path $vswhere) {
         $vsRoots = & $vswhere -latest -products * -property installationPath 2>$null
         foreach ($vsRoot in @($vsRoots)) {
@@ -93,10 +147,12 @@ function Resolve-AppxToolsPath {
     }
 
     # 2) 退回：扫描常见安装根下的 VS MSBuild AppxPackage 目录。
-    $roots = @(
-        (Join-Path $env:ProgramFiles 'Microsoft Visual Studio'),
-        (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio')
-    ) | Where-Object { $_ -and (Test-Path $_) }
+    $candidateRoots = @(
+        (Join-Path $programFiles 'Microsoft Visual Studio'),
+        (Join-Path $programFilesX86 'Microsoft Visual Studio'),
+        'I:\SoftWare\Microsoft Visual Studio'
+    )
+    $roots = $candidateRoots | Where-Object { $_ -and (Test-Path $_) }
     foreach ($root in $roots) {
         $found = Get-ChildItem -Path $root -Recurse -Filter $dllName -ErrorAction SilentlyContinue |
             Where-Object { $_.DirectoryName -match 'AppxPackage' } |
@@ -110,7 +166,8 @@ function Resolve-AppxToolsPath {
 $appxToolsPath = Resolve-AppxToolsPath
 if ($appxToolsPath) {
     # 末尾保留反斜杠：targets 中 $(AppxMSBuildToolsPath)Microsoft.Build.AppxPackage.dll 未额外加分隔符。
-    $publishArgs += ('-p:AppxMSBuildToolsPath=' + $appxToolsPath.TrimEnd('\') + '\')
+    $normalizedAppxToolsPath = $appxToolsPath.TrimEnd([IO.Path]::DirectorySeparatorChar).Replace('\\', '/') + '/'
+    $publishArgs += ('-p:AppxMSBuildToolsPath=' + $normalizedAppxToolsPath)
     Write-Output ("APPX_TOOLS=" + $appxToolsPath)
 }
 else {
@@ -118,11 +175,21 @@ else {
 }
 
 # 先显式 restore，再 publish（同进程 & 调用，日志直接进 CI 输出，便于排错）。
-& $dotnet restore $csproj -p:Platform=x64
-Write-Output ("RESTORE_EXIT=" + $LASTEXITCODE)
+# NOTE: ReadyToRun 编译器包在 restore 时解析；这里必须带 RID 与 PublishReadyToRun，publish 才能 --no-restore 稳定复用。
+$restoreArgs = @(
+    'restore', $csproj,
+    '-p:Platform=x64',
+    '-p:UseRidGraph=true',
+    '-r', 'win10-x64',
+    '-p:PublishReadyToRun=true'
+)
+$restoreExit = Invoke-NativeProcess -FilePath $dotnet -Arguments $restoreArgs
+Write-Output ("RESTORE_EXIT=" + $restoreExit)
+if ($restoreExit -ne 0) {
+    throw ('dotnet restore failed (exit=' + $restoreExit + ').')
+}
 
-& $dotnet @publishArgs
-$publishExit = $LASTEXITCODE
+$publishExit = Invoke-NativeProcess -FilePath $dotnet -Arguments $publishArgs
 Write-Output ("PUBLISH_EXIT=" + $publishExit)
 
 # 以「产物是否生成」为最终判据：WinUI 的 PRI 子任务个别环境会返回非 0，

@@ -172,7 +172,7 @@ public sealed class DoctorService
         const string id = "current-link-integrity";
         const string title = "current 链接完整性";
 
-        var sdkTypes = new[] { SdkType.Java, SdkType.Maven, SdkType.Node, SdkType.Go };
+        var sdkTypes = new[] { SdkType.Java, SdkType.Maven, SdkType.Node, SdkType.Go, SdkType.Rust };
         var broken = new List<string>();
         var missing = new List<string>();
 
@@ -348,6 +348,7 @@ public sealed class DoctorService
             ("node", "-v"),
             ("go", "version"),
             ("mvn", "-v"),
+            ("rustc", "--version"),
         };
 
         var unresolved = new List<string>();

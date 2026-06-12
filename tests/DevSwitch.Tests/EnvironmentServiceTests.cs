@@ -30,8 +30,8 @@ public sealed class EnvironmentServiceTests
         // 写入了默认 4 个变量。
         Assert.Equal(4, helper.WriteCalls[0].Count);
         Assert.Contains(helper.WriteCalls[0], v => v.Name == "DEVSWITCH_HOME");
-        // 置顶了 4 个托管 PATH 片段（本质：初始化会把托管片段写入 Path）。
-        Assert.Equal(4, helper.PrependCalls[0].Count);
+        // 置顶了 5 个托管 PATH 片段（本质：初始化会把托管片段写入 Path）。
+        Assert.Equal(5, helper.PrependCalls[0].Count);
     }
 
     [Fact]
@@ -155,7 +155,7 @@ public sealed class EnvironmentServiceTests
         Assert.True(result.Success);
         Assert.Equal(1, helper.RemoveCalls.Count);
         // 重置时移除的是托管片段集合。
-        Assert.Equal(4, helper.RemoveCalls[0].Count);
+        Assert.Equal(5, helper.RemoveCalls[0].Count);
         Assert.Single(result.RemovedPathEntries);
         Assert.Equal(1, helper.BroadcastCalls);
     }

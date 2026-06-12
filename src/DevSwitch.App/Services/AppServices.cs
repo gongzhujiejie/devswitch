@@ -38,6 +38,8 @@ public sealed class AppServices : IDisposable
 
     private readonly SdkCatalogStore catalogStore = new();
     private readonly ISdkCurrentPathProvider currentPathProvider = new SdkCurrentPathProvider();
+    private readonly Lazy<string?> helperPath;
+    private readonly Lazy<string?> shimPath;
 
     // 共享 HttpClient：设置较长超时供大文件下载，统一附带 User-Agent（GitHub API 强制要求）。
     private readonly HttpClient httpClient;
@@ -54,8 +56,9 @@ public sealed class AppServices : IDisposable
         }
 
         DataRoot = dataRoot;
-        HelperPath = ResolveHelperPath();
-        ShimPath = ResolveExecutablePath(ShimExecutableName);
+        // helper/shim 只在切换、诊断、重建 shims 等用户动作需要；懒解析可避免启动时多轮 File.Exists 与父目录扫描。
+        helperPath = new Lazy<string?>(ResolveHelperPath);
+        shimPath = new Lazy<string?>(() => ResolveExecutablePath(ShimExecutableName));
 
         httpClient = new HttpClient
         {
@@ -73,15 +76,15 @@ public sealed class AppServices : IDisposable
     /// <summary>
     /// 解析出的 helper.exe 路径；找不到时为 null。
     /// </summary>
-    public string? HelperPath { get; }
+    public string? HelperPath => helperPath.Value;
 
     /// <summary>
     /// 解析出的 DevSwitch.Shim.exe 路径（转发器源）；找不到时为 null。
     /// </summary>
-    public string? ShimPath { get; }
+    public string? ShimPath => shimPath.Value;
 
     /// <summary>
-    /// helper 是否可用（路径已解析且文件存在）。
+    /// helper 是否可用（路径按需解析且文件存在）。
     /// </summary>
     public bool IsHelperAvailable => !string.IsNullOrWhiteSpace(HelperPath) && File.Exists(HelperPath);
 
@@ -111,6 +114,25 @@ public sealed class AppServices : IDisposable
         // 为 mvn 命令验证注入有效 JAVA_HOME：优先 active Java 记录路径，否则任一可用 Java。
         var commandRunner = new ProcessSdkCommandRunner(ResolveActiveJavaHome);
         return new SdkVerificationService(linkInspector, commandRunner);
+    }
+
+    /// <summary>
+    /// 创建本地 SDK 导入登记服务：导入成功后自动运行一次命令验证并回写版本/status。
+    /// </summary>
+    public SdkImportRegistrationService CreateImportRegistrationService()
+    {
+        return new SdkImportRegistrationService(
+            DataRoot,
+            catalogStore,
+            new SdkImportVerificationService(new ProcessSdkCommandRunner(ResolveActiveJavaHome)));
+    }
+
+    /// <summary>
+    /// 创建导入/下载登记阶段使用的自动验证服务。
+    /// </summary>
+    private SdkImportVerificationService CreateImportVerificationService()
+    {
+        return new SdkImportVerificationService(new ProcessSdkCommandRunner(ResolveActiveJavaHome));
     }
 
     /// <summary>
@@ -209,6 +231,7 @@ public sealed class AppServices : IDisposable
         sourceList.Add(HttpSdkVersionSource.CreateMaven(fetcher));
         sourceList.Add(HttpSdkVersionSource.CreateNode(fetcher));
         sourceList.Add(HttpSdkVersionSource.CreateGo(fetcher));
+        sourceList.Add(new RustupSource());
 
         // Oracle JDK 官方源（NFTC /latest/）：与 Adoptium 并存，覆盖只认 Oracle JDK 的企业项目。
         // 探活用 HTTP HEAD：复用共享 HttpClient，命中 200/2xx 才视为可用，
@@ -259,8 +282,17 @@ public sealed class AppServices : IDisposable
     public DownloadCompletionPipeline CreateCompletionPipeline()
     {
         var extractor = new ZipArchiveExtractor();
-        var registrar = new CatalogManagedSdkRegistrar(catalogStore, DataRoot);
+        var registrar = new CatalogManagedSdkRegistrar(catalogStore, DataRoot, CreateImportVerificationService());
         return new DownloadCompletionPipeline(extractor, registrar);
+    }
+
+    /// <summary>
+    /// 创建 Rustup installer 完成流程（校验 → rustup-init → 登记真实 toolchain root）。
+    /// </summary>
+    public RustupInstallCompletionPipeline CreateRustupCompletionPipeline()
+    {
+        var registrar = new CatalogManagedSdkRegistrar(catalogStore, DataRoot, CreateImportVerificationService());
+        return new RustupInstallCompletionPipeline(new ProcessRustupInstallerRunner(), registrar);
     }
 
     // updater 可执行文件名常量。
@@ -336,9 +368,9 @@ public sealed class AppServices : IDisposable
     }
 
     /// <summary>
-    /// 共享 HttpClient 文本抓取实现，供版本源解析使用。
+    /// 共享 HttpClient 文本抓取实现，供版本源解析与 checksum 读取使用。
     /// </summary>
-    private async Task<string> FetchTextAsync(string url, CancellationToken cancellationToken)
+    public async Task<string> FetchTextAsync(string url, CancellationToken cancellationToken)
     {
         return await httpClient.GetStringAsync(url, cancellationToken).ConfigureAwait(false);
     }
@@ -432,6 +464,25 @@ internal sealed class ProcessSdkCommandRunner : ISdkCommandRunner
 
         var execution = await ProcessExecution.RunAsync(fileName, arguments, timeout, cancellationToken, env).ConfigureAwait(false);
         return new SdkCommandResult(execution.Started, execution.ExitCode, execution.StdOut, execution.StdErr, execution.TimedOut);
+    }
+}
+
+/// <summary>
+/// 基于 System.Diagnostics.Process 的 rustup installer 执行器，只对本次子进程注入 CARGO_HOME/RUSTUP_HOME。
+/// </summary>
+internal sealed class ProcessRustupInstallerRunner : IRustupInstallerRunner
+{
+    /// <inheritdoc />
+    public async Task<RustupInstallerResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        IReadOnlyDictionary<string, string> environment,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default)
+    {
+        // NOTE: environment 只传给 rustup 子进程，配合 --no-modify-path 保证不会污染用户全局 Rust 配置。
+        var execution = await ProcessExecution.RunAsync(fileName, arguments, timeout, cancellationToken, environment).ConfigureAwait(false);
+        return new RustupInstallerResult(execution.Started, execution.ExitCode, execution.StdOut, execution.StdErr, execution.TimedOut);
     }
 }
 
@@ -569,14 +620,16 @@ internal sealed class CatalogManagedSdkRegistrar : IManagedSdkRegistrar
 {
     private readonly SdkCatalogStore catalogStore;
     private readonly string dataRoot;
+    private readonly SdkImportVerificationService verificationService;
 
     /// <summary>
     /// 创建托管 SDK 登记器。
     /// </summary>
-    public CatalogManagedSdkRegistrar(SdkCatalogStore catalogStore, string dataRoot)
+    public CatalogManagedSdkRegistrar(SdkCatalogStore catalogStore, string dataRoot, SdkImportVerificationService verificationService)
     {
         this.catalogStore = catalogStore;
         this.dataRoot = dataRoot;
+        this.verificationService = verificationService;
     }
 
     /// <inheritdoc />
@@ -587,44 +640,21 @@ internal sealed class CatalogManagedSdkRegistrar : IManagedSdkRegistrar
 
         var catalog = await catalogStore.LoadOrCreateAsync(dataRoot).ConfigureAwait(false);
 
-        // 构造托管 SDK 记录：来源为 Managed，路径为解压目录，状态可用。
-        var record = new SdkRecord(
-            Id: $"{TypeSlug(registration.SdkType)}-{Guid.NewGuid():N}",
-            Type: registration.SdkType,
-            Name: BuildName(registration),
-            Version: registration.Version,
-            Distribution: registration.Distribution,
-            Architecture: registration.Arch,
-            Source: SdkSourceKind.Managed,
-            Path: registration.InstallDirectory,
-            Status: SdkRecordStatus.Usable,
-            CreatedAt: DateTimeOffset.UtcNow,
-            LastVerifiedAt: null);
+        // 下载登记比普通本地导入更严格：解压目录结构/类型不匹配直接阻断，避免污染 catalog；
+        // 结构正确但命令验证失败时仍登记为 Unavailable，方便用户看到路径并手动处理。
+        var record = await ManagedSdkRecordFactory.CreateVerifiedRecordAsync(
+            registration.SdkType,
+            registration.Version,
+            registration.Distribution,
+            registration.Arch,
+            registration.InstallDirectory,
+            verificationService,
+            cancellationToken).ConfigureAwait(false);
 
         var updated = catalog with { Items = catalog.Items.Concat(new[] { record }).ToArray() };
         await catalogStore.SaveAsync(dataRoot, updated).ConfigureAwait(false);
     }
 
-    private static string BuildName(ManagedSdkRegistration registration)
-    {
-        // 友好名称形如 "Temurin 21.0.4 (x64)"，UI 列表更易读。
-        string arch = registration.Arch switch
-        {
-            SdkArchitecture.X64 => " (x64)",
-            SdkArchitecture.Arm64 => " (arm64)",
-            _ => string.Empty,
-        };
-        return $"{registration.Distribution} {registration.Version}{arch}";
-    }
-
-    private static string TypeSlug(SdkType type) => type switch
-    {
-        SdkType.Java => "java",
-        SdkType.Maven => "maven",
-        SdkType.Node => "node",
-        SdkType.Go => "go",
-        _ => "sdk",
-    };
 }
 
 // ===================== 更新源 HTTP 实现 =====================

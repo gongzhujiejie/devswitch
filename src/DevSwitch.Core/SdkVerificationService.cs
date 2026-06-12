@@ -36,6 +36,10 @@ public sealed partial class SdkVerificationService
     [GeneratedRegex("go([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)", RegexOptions.IgnoreCase)]
     private static partial Regex GoVersionRegex();
 
+    // 解析 rustc --version：形如 rustc 1.78.0 / rustc 1.80.0-nightly，捕获组 1 为 Rust 编译器版本。
+    [GeneratedRegex("rustc\\s+([0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:-[0-9A-Za-z.\\-]+)?)", RegexOptions.IgnoreCase)]
+    private static partial Regex RustVersionRegex();
+
     // NOTE: 默认命令超时；真实超时控制交由注入的 ICommandRunner，此处仅作为透传默认值。
     private static readonly TimeSpan DefaultCommandTimeout = TimeSpan.FromSeconds(10);
 
@@ -176,6 +180,7 @@ public sealed partial class SdkVerificationService
             SdkType.Maven => ParseMavenVersion(primary) ?? ParseMavenVersion(fallback),
             SdkType.Node => ParseNodeVersion(primary) ?? ParseNodeVersion(fallback),
             SdkType.Go => ParseGoVersion(primary) ?? ParseGoVersion(fallback),
+            SdkType.Rust => ParseRustVersion(primary) ?? ParseRustVersion(fallback),
             _ => null,
         };
     }
@@ -240,6 +245,21 @@ public sealed partial class SdkVerificationService
     }
 
     /// <summary>
+    /// 解析 rustc --version 输出，例如：rustc 1.78.0 (9b00956e5 2024-04-29)。
+    /// </summary>
+    private static string? ParseRustVersion(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        // Rust stable/nightly/beta 都以 rustc 后的版本 token 输出，保留预发布后缀便于 UI 区分。
+        var match = RustVersionRegex().Match(text);
+        return match.Success ? match.Groups[1].Value : null;
+    }
+
+    /// <summary>
     /// 纯函数：返回某 SDK 类型的关键命令文件相对路径列表（与 design.md 第9节一致）。
     /// </summary>
     /// <param name="sdkType">SDK 类型。</param>
@@ -264,6 +284,13 @@ public sealed partial class SdkVerificationService
             {
                 Path.Combine("bin", "go.exe"),
                 Path.Combine("bin", "gofmt.exe"),
+            },
+            // Rust：bin\rustc.exe + bin\cargo.exe + bin\rustdoc.exe。
+            SdkType.Rust => new[]
+            {
+                Path.Combine("bin", "rustc.exe"),
+                Path.Combine("bin", "cargo.exe"),
+                Path.Combine("bin", "rustdoc.exe"),
             },
             _ => Array.Empty<string>(),
         };
@@ -309,6 +336,7 @@ public sealed partial class SdkVerificationService
             SdkType.Maven => ("mvn", new[] { "-v" }),
             SdkType.Node => ("node", new[] { "-v" }),
             SdkType.Go => ("go", new[] { "version" }),
+            SdkType.Rust => ("rustc", new[] { "--version" }),
             _ => throw new ArgumentOutOfRangeException(nameof(sdkType), sdkType, "Unsupported SDK type for command verification."),
         };
     }
@@ -332,6 +360,8 @@ public sealed partial class SdkVerificationService
             SdkType.Node => (Path.Combine(rootPath, "node.exe"), new[] { "-v" }),
             // Go：<root>\bin\go.exe version。
             SdkType.Go => (Path.Combine(rootPath, "bin", "go.exe"), new[] { "version" }),
+            // Rust：<root>\bin\rustc.exe --version。
+            SdkType.Rust => (Path.Combine(rootPath, "bin", "rustc.exe"), new[] { "--version" }),
             _ => throw new ArgumentOutOfRangeException(nameof(sdkType), sdkType, "Unsupported SDK type for command verification."),
         };
     }

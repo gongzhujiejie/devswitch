@@ -182,7 +182,7 @@ public static class EnvironmentLayout
     }
 
     /// <summary>
-    /// 生成 DevSwitch 托管 PATH 片段（遗留占位符版本），顺序固定：java、maven、node、go。
+    /// 生成 DevSwitch 托管 PATH 片段（遗留占位符版本），顺序固定：java、maven、node、go、rust。
     /// </summary>
     /// <remarks>
     /// 遗留实现：返回嵌套 %DEVSWITCH_HOME% 占位符片段。该形式因 Windows 仅展开一层而无法生效，
@@ -200,11 +200,12 @@ public static class EnvironmentLayout
             $@"{HomePlaceholder}\current\maven\bin",
             $@"{HomePlaceholder}\current\node",
             $@"{HomePlaceholder}\current\go\bin",
+            $@"{HomePlaceholder}\current\rust\bin",
         };
     }
 
     /// <summary>
-    /// 生成 DevSwitch 托管 PATH 片段（绝对路径版本），顺序固定：java、maven、node、go。
+    /// 生成 DevSwitch 托管 PATH 片段（绝对路径版本），顺序固定：java、maven、node、go、rust。
     /// </summary>
     /// <param name="devSwitchHomeValue">DEVSWITCH_HOME 的值，必须是解析后的绝对路径（数据根目录）。</param>
     /// <returns>有序的托管 PATH 片段集合（绝对路径形式）。</returns>
@@ -225,6 +226,7 @@ public static class EnvironmentLayout
             Path.Combine(devSwitchHomeValue, "current", "maven", "bin"),
             Path.Combine(devSwitchHomeValue, "current", "node"),
             Path.Combine(devSwitchHomeValue, "current", "go", "bin"),
+            Path.Combine(devSwitchHomeValue, "current", "rust", "bin"),
         };
     }
 

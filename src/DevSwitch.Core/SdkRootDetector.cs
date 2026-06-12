@@ -34,6 +34,11 @@ public enum SdkType
     /// Go 开发工具链，当前纵切识别 Windows Go 根目录。
     /// </summary>
     Go,
+
+    /// <summary>
+    /// Rust 开发工具链，识别 standalone toolchain 根目录。
+    /// </summary>
+    Rust,
 }
 
 /// <summary>
@@ -79,8 +84,9 @@ public static class SdkRootDetector
         }
 
         // NOTE: 当前 TDD 纵切保留 JDK 的最小根目录识别：release + java.exe + javac.exe。
-        // 若用户误选 JDK 的 bin 目录，则先回退到父目录再判定，保持“只接受 SDK 根目录”的公开行为。
-        var javaRootPath = GetJavaRootCandidate(rootPath);
+        // 若用户误选 JDK/Rust 的 bin 目录，则先回退到父目录再判定，保持“只接受 SDK 根目录”的公开行为。
+        var binParentRootPath = GetRootCandidateFromBin(rootPath);
+        var javaRootPath = binParentRootPath;
         var releaseFile = Path.Combine(javaRootPath, "release");
         var javaExecutable = Path.Combine(javaRootPath, "bin", "java.exe");
         var javacExecutable = Path.Combine(javaRootPath, "bin", "javac.exe");
@@ -116,14 +122,26 @@ public static class SdkRootDetector
             return new SdkDetectionResult(SdkType.Go, SdkStatus.Usable, rootPath);
         }
 
+        // NOTE: Rust standalone toolchain 根目录通过 bin/rustc.exe、bin/cargo.exe、bin/rustdoc.exe 识别。
+        // 不识别 .cargo/bin rustup proxy 目录，避免把 toolchain manager 当作可切换 SDK 根。
+        var rustRootPath = binParentRootPath;
+        var rustcExecutable = Path.Combine(rustRootPath, "bin", "rustc.exe");
+        var cargoExecutable = Path.Combine(rustRootPath, "bin", "cargo.exe");
+        var rustdocExecutable = Path.Combine(rustRootPath, "bin", "rustdoc.exe");
+
+        if (File.Exists(rustcExecutable) && File.Exists(cargoExecutable) && File.Exists(rustdocExecutable))
+        {
+            return new SdkDetectionResult(SdkType.Rust, SdkStatus.Usable, rustRootPath);
+        }
+
         // NOTE: 路径参数有效但目录结构不匹配时返回不可用状态，避免导入流程被异常打断。
         // 调用方可据此展示“不是受支持 SDK 根目录”的提示，同时仍保留用户选择的原始路径。
         return new SdkDetectionResult(SdkType.Unknown, SdkStatus.Unavailable, rootPath);
     }
 
-    private static string GetJavaRootCandidate(string rootPath)
+    private static string GetRootCandidateFromBin(string rootPath)
     {
-        // NOTE: Windows JDK 的可执行文件位于 bin 子目录；误选 bin 时父目录才是 SDK 根目录。
+        // NOTE: Windows JDK/Rust 的可执行文件位于 bin 子目录；误选 bin 时父目录才是 SDK 根目录。
         // 仅在目录名精确为 bin 且存在父目录时回退，避免影响 Maven、Node、Go 等既有根目录识别。
         var directoryName = Path.GetFileName(Path.TrimEndingDirectorySeparator(rootPath));
         var parentDirectory = Directory.GetParent(rootPath);

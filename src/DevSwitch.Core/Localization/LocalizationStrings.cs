@@ -45,7 +45,7 @@ public static class LocalizationStrings
 
         // 首页 hero 区
         ["home.subtitle"] = "Windows App SDK · 开发环境切换器",
-        ["home.description"] = "统一管理 JDK、Maven、Node.js、Go 等本地开发运行时。快速导入、检查路径，并安全切换环境。",
+        ["home.description"] = "统一管理 JDK、Maven、Node.js、Go、Rust 等本地开发运行时。快速导入、检查路径，并安全切换环境。",
         ["home.openSdk"] = "打开 SDK 管理",
         ["home.runDoctor"] = "运行环境诊断",
         ["home.deco.active"] = "使用中",
@@ -127,7 +127,7 @@ public static class LocalizationStrings
         ["sdk.path.copied"] = "已复制路径到剪贴板",
 
         // SDK 总览/分类管理页
-        ["sdk.overview.subtitle"] = "集中管理本机的 Java、Maven、Node.js、Go 运行时。点选下方分类卡片进入对应版本管理。",
+        ["sdk.overview.subtitle"] = "集中管理本机的 Java、Maven、Node.js、Go、Rust 运行时。点选下方分类卡片进入对应版本管理。",
         ["sdk.page.subtitle"] = "管理当前 SDK 类型的本地版本、来源路径和切换状态。",
         ["sdk.button.addLocal"] = "添加本地 SDK",
         ["sdk.button.download"] = "下载",
@@ -146,7 +146,14 @@ public static class LocalizationStrings
         ["sdk.row.runtime"] = "SDK 运行时",
         ["sdk.row.moreActions"] = "更多操作",
         ["sdk.row.action.verify"] = "验证",
+        ["sdk.row.action.openLocation"] = "打开所在位置",
         ["sdk.row.action.editName"] = "编辑名称",
+        ["sdk.row.action.delete"] = "删除",
+        ["sdk.openLocation.emptyTitle"] = "无法打开位置",
+        ["sdk.openLocation.emptyMessage"] = "该 SDK 没有登记路径。",
+        ["sdk.openLocation.missingTitle"] = "SDK 路径不存在",
+        ["sdk.openLocation.missingMessage"] = "无法找到该 SDK 目录：\n{0}\n\n该 SDK 可能已被移动或删除，请刷新列表或编辑登记。",
+        ["sdk.openLocation.failedTitle"] = "打开失败",
         ["sdk.empty.title"] = "暂无版本",
 
         // 环境诊断页
@@ -189,7 +196,7 @@ public static class LocalizationStrings
 
         // Home hero section
         ["home.subtitle"] = "Windows App SDK · Development environment switcher",
-        ["home.description"] = "Manage local JDK, Maven, Node.js, Go and other developer runtimes. Import, inspect paths, and switch environments safely.",
+        ["home.description"] = "Manage local JDK, Maven, Node.js, Go, Rust and other developer runtimes. Import, inspect paths, and switch environments safely.",
         ["home.openSdk"] = "Open SDK Management",
         ["home.runDoctor"] = "Run Diagnostics",
         ["home.deco.active"] = "Active",
@@ -271,7 +278,7 @@ public static class LocalizationStrings
         ["sdk.path.copied"] = "Path copied to clipboard",
 
         // SDK overview / category page
-        ["sdk.overview.subtitle"] = "Manage local Java, Maven, Node.js and Go runtimes from one place. Pick a category card below to manage versions.",
+        ["sdk.overview.subtitle"] = "Manage local Java, Maven, Node.js, Go and Rust runtimes from one place. Pick a category card below to manage versions.",
         ["sdk.page.subtitle"] = "Manage local versions, source paths and active state for the current SDK type.",
         ["sdk.button.addLocal"] = "Add Local SDK",
         ["sdk.button.download"] = "Download",
@@ -290,7 +297,14 @@ public static class LocalizationStrings
         ["sdk.row.runtime"] = "SDK Runtime",
         ["sdk.row.moreActions"] = "More Actions",
         ["sdk.row.action.verify"] = "Verify",
+        ["sdk.row.action.openLocation"] = "Open File Location",
         ["sdk.row.action.editName"] = "Edit Name",
+        ["sdk.row.action.delete"] = "Delete",
+        ["sdk.openLocation.emptyTitle"] = "Cannot open location",
+        ["sdk.openLocation.emptyMessage"] = "This SDK has no registered path.",
+        ["sdk.openLocation.missingTitle"] = "SDK path not found",
+        ["sdk.openLocation.missingMessage"] = "Cannot find this SDK folder:\n{0}\n\nThe SDK may have been moved or deleted. Refresh the list or edit the registration.",
+        ["sdk.openLocation.failedTitle"] = "Open failed",
         ["sdk.empty.title"] = "No versions yet",
 
         // Diagnostics page

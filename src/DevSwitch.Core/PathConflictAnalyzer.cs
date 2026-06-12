@@ -1,5 +1,5 @@
 // 文件用途：纯算法检测 PATH 前序冲突——找出排在 DevSwitch 托管片段之前、可能遮蔽
-//           java/node/go/mvn 命令的外部 PATH 条目，输出冲突来源、作用域与清理建议。
+//           java/node/go/mvn/rustc/cargo 命令的外部 PATH 条目，输出冲突来源、作用域与清理建议。
 // 创建/修改日期：2026-06-10
 // 语言版本要求：C# 12 / .NET 8+
 // 依赖库：System.Collections.Generic（隐式 using）
@@ -10,7 +10,7 @@ namespace DevSwitch.Core;
 /// <summary>
 /// 单个被遮蔽 SDK 类型对应的 PATH 冲突。
 /// </summary>
-/// <param name="SdkType">受影响的 SDK 类型（Java/Node/Go/Maven）。</param>
+/// <param name="SdkType">受影响的 SDK 类型（Java/Node/Go/Maven/Rust）。</param>
 /// <param name="ShadowingEntry">排在托管片段之前、可能遮蔽命令的外部 PATH 条目。</param>
 /// <param name="Commands">该条目中命中的命令文件名集合，例如 java.exe。</param>
 /// <param name="Source">推断出的冲突来源标识，例如 oracle-javapath、external-jdk。</param>
@@ -72,6 +72,7 @@ public static class PathConflictAnalyzer
             [SdkType.Maven] = new[] { "mvn" },
             [SdkType.Node] = new[] { "node", "npm" },
             [SdkType.Go] = new[] { "go", "gofmt" },
+            [SdkType.Rust] = new[] { "rustc", "cargo", "rustdoc" },
         };
 
     /// <summary>
@@ -295,6 +296,15 @@ public static class PathConflictAnalyzer
             matches.Add((SdkType.Go, new[] { "go", "gofmt" }));
         }
 
+        // Rust 常见遮蔽来源是用户级 .cargo\bin（rustup proxy）或外部 rustup/rust toolchain 目录。
+        if (lower.Contains(Path.Combine(".cargo", "bin").ToLowerInvariant())
+            || lower.Contains(Path.Combine("cargo", "bin").ToLowerInvariant())
+            || lower.Contains("rustup")
+            || ContainsSegment(lower, "rust"))
+        {
+            matches.Add((SdkType.Rust, new[] { "rustc", "cargo", "rustdoc" }));
+        }
+
         return matches;
     }
 
@@ -319,12 +329,18 @@ public static class PathConflictAnalyzer
             return "oracle-javapath";
         }
 
+        if (sdkType == SdkType.Rust && lower.Contains(Path.Combine(".cargo", "bin").ToLowerInvariant()))
+        {
+            return "rustup-cargo-bin";
+        }
+
         return sdkType switch
         {
             SdkType.Java => "external-java",
             SdkType.Node => "external-node",
             SdkType.Go => "external-go",
             SdkType.Maven => "external-maven",
+            SdkType.Rust => "external-rust",
             _ => "external",
         };
     }

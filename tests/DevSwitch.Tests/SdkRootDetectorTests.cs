@@ -80,6 +80,58 @@ public sealed class SdkRootDetectorTests
     }
 
     [Fact]
+    public void DetectReturnsUsableRustWhenRootContainsRustcCargoAndRustdocExecutables()
+    {
+        // NOTE: Rust standalone toolchain 根目录通过 bin/rustc.exe、bin/cargo.exe 与 bin/rustdoc.exe 识别。
+        // 这里仅构造最小命令文件，不依赖本机真实 Rust 安装。
+        var rustRoot = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(rustRoot, "bin"));
+        File.WriteAllText(Path.Combine(rustRoot, "bin", "rustc.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(rustRoot, "bin", "cargo.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(rustRoot, "bin", "rustdoc.exe"), string.Empty);
+
+        var result = SdkRootDetector.Detect(rustRoot);
+
+        Assert.Equal(SdkType.Rust, result.Type);
+        Assert.Equal(SdkStatus.Usable, result.Status);
+        Assert.Equal(rustRoot, result.RootPath);
+    }
+
+    [Fact]
+    public void DetectFallsBackToParentRustRootWhenUserSelectsRustBinDirectory()
+    {
+        // NOTE: Rust 用户经常从命令目录定位工具链；误选 bin 时应回退父目录，和 JDK bin 容错保持一致。
+        var rustRoot = CreateTemporaryDirectory();
+        var binPath = Path.Combine(rustRoot, "bin");
+        Directory.CreateDirectory(binPath);
+        File.WriteAllText(Path.Combine(binPath, "rustc.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(binPath, "cargo.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(binPath, "rustdoc.exe"), string.Empty);
+
+        var result = SdkRootDetector.Detect(binPath);
+
+        Assert.Equal(SdkType.Rust, result.Type);
+        Assert.Equal(SdkStatus.Usable, result.Status);
+        Assert.Equal(rustRoot, result.RootPath);
+    }
+
+    [Fact]
+    public void DetectDoesNotTreatCargoBinRustupProxyAsRustSdkRoot()
+    {
+        // NOTE: .cargo/bin 通常是 rustup proxy 目录，不是具体 toolchain 根；必须避免把它登记成可切换 SDK。
+        var cargoBin = CreateTemporaryDirectory();
+        File.WriteAllText(Path.Combine(cargoBin, "rustc.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(cargoBin, "cargo.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(cargoBin, "rustup.exe"), string.Empty);
+
+        var result = SdkRootDetector.Detect(cargoBin);
+
+        Assert.Equal(SdkType.Unknown, result.Type);
+        Assert.Equal(SdkStatus.Unavailable, result.Status);
+        Assert.Equal(cargoBin, result.RootPath);
+    }
+
+    [Fact]
     public void DetectReturnsUnavailableWhenDirectoryDoesNotMatchSupportedSdkShape()
     {
         // NOTE: 识别失败属于普通导入校验结果，不应以异常中断调用方流程。

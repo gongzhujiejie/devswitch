@@ -2,13 +2,13 @@
 
 # 🎛️ DevSwitch
 
-**Windows 下统一管理 JDK、Maven、Node.js、Go 等开发运行时，一键切换、秒级生效、零卡顿。**
+**Windows 下统一管理 JDK、Maven、Node.js、Go、Rust 等开发运行时，一键切换、秒级生效、零卡顿。**
 
 [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-0078D4?logo=windows)](https://github.com/gongzhujiejie/devswitch)
 [![.NET](https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet)](https://dotnet.microsoft.com/)
 [![WinUI](https://img.shields.io/badge/UI-WinUI%203-2563EB)](https://learn.microsoft.com/windows/apps/winui/)
 [![Language](https://img.shields.io/badge/lang-C%23%20%7C%20C%2B%2B-178600)](https://github.com/gongzhujiejie/devswitch)
-[![Release](https://img.shields.io/badge/release-v0.2.8-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
+[![Release](https://img.shields.io/badge/release-v0.2.11-brightgreen)](https://github.com/gongzhujiejie/devswitch/releases)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
 [![Self-Update](https://img.shields.io/badge/self--update-GitHub-purple?logo=github)](https://github.com/gongzhujiejie/devswitch/releases)
 

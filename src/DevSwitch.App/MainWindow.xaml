@@ -319,6 +319,37 @@
                                             VerticalAlignment="Center" />
                                     </Grid>
                                 </Button>
+                                <Button
+                                    x:Name="RustNavButton"
+                                    MinHeight="34"
+                                    Padding="0"
+                                    HorizontalAlignment="Stretch"
+                                    HorizontalContentAlignment="Stretch"
+                                    Background="Transparent"
+                                    BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                    Click="OnRustNavClick">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="4" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Border
+                                            x:Name="RustIndicator"
+                                            Width="3"
+                                            Height="16"
+                                            Background="{StaticResource DevSwitchAccentBrush}"
+                                            CornerRadius="2"
+                                            Visibility="Collapsed"
+                                            VerticalAlignment="Center" />
+                                        <TextBlock
+                                            x:Name="RustNavText"
+                                            Grid.Column="1"
+                                            Text="Rust"
+                                            VerticalAlignment="Center" />
+                                    </Grid>
+                                </Button>
                             </StackPanel>
 
                             <Button
@@ -754,10 +785,10 @@
                                 MinWidth="148"
                                 PlaceholderText="状态"
                                 SelectionChanged="OnStatusFilterChanged">
-                                <ComboBoxItem x:Name="StatusFilterAllItem" Content="全部" IsSelected="True" />
-                                <ComboBoxItem x:Name="StatusFilterActiveItem" Content="使用中" />
-                                <ComboBoxItem x:Name="StatusFilterUsableItem" Content="可用" />
-                                <ComboBoxItem x:Name="StatusFilterUnavailableItem" Content="不可用" />
+                                <ComboBoxItem x:Name="StatusFilterAllItem" Content="全部" Tag="All" IsSelected="True" />
+                                <ComboBoxItem x:Name="StatusFilterActiveItem" Content="使用中" Tag="InUse" />
+                                <ComboBoxItem x:Name="StatusFilterUsableItem" Content="可用" Tag="Available" />
+                                <ComboBoxItem x:Name="StatusFilterUnavailableItem" Content="不可用" Tag="Unavailable" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -851,6 +882,11 @@
                                                                     <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE9D9;" />
                                                                 </MenuFlyoutItem.Icon>
                                                             </MenuFlyoutItem>
+                                                            <MenuFlyoutItem Click="OnOpenSdkLocationClick" Text="打开所在位置">
+                                                                <MenuFlyoutItem.Icon>
+                                                                    <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE838;" />
+                                                                </MenuFlyoutItem.Icon>
+                                                            </MenuFlyoutItem>
                                                             <MenuFlyoutItem Click="OnEditSdkClick" Text="编辑名称">
                                                                 <MenuFlyoutItem.Icon>
                                                                     <FontIcon FontFamily="Segoe MDL2 Assets" Glyph="&#xE70F;" />
@@ -879,7 +915,7 @@
                     </Grid>
                 </Grid>
 
-                <ScrollViewer x:Name="SettingsContent" Visibility="Collapsed">
+                <ScrollViewer x:Name="SettingsContent" x:Load="False" Visibility="Collapsed">
                     <StackPanel Padding="36,30,36,44" Spacing="26">
                         <StackPanel Spacing="4">
                             <TextBlock x:Name="SettingsTitleText" FontSize="30" FontWeight="SemiBold" Text="设置" />
@@ -1055,7 +1091,7 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Grid x:Name="DoctorContent" Visibility="Collapsed">
+                <Grid x:Name="DoctorContent" x:Load="False" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -1132,10 +1168,10 @@
                 </Grid>
 
                 <!-- 配置档案页：独立 UserControl，自包含增删改与一键应用交互。 -->
-                <views:ProfilesView x:Name="ProfilesContent" Visibility="Collapsed" />
+                <views:ProfilesView x:Name="ProfilesContent" x:Load="False" Visibility="Collapsed" />
 
                 <!-- 日志页：独立 UserControl，异步读取+脱敏展示，支持过滤/刷新/清理。 -->
-                <views:LogsView x:Name="LogsContent" Visibility="Collapsed" />
+                <views:LogsView x:Name="LogsContent" x:Load="False" Visibility="Collapsed" />
 
                 <Grid x:Name="PlaceholderContent" Visibility="Collapsed">
                     <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center">

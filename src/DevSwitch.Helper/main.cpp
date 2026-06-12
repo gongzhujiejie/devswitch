@@ -2031,7 +2031,7 @@ std::vector<std::wstring> EnumerateExecutableStems(const std::wstring& dir) {
     return stems;
 }
 
-// 收集某 dataRoot 下应该存在的全部 shim stem：按 java/maven/node/go 的 current\<type>\bin 顺序枚举，整体去重。
+// 收集某 dataRoot 下应该存在的全部 shim stem：按 java/maven/node/go/rust 的 current\<type>\bin 顺序枚举，整体去重。
 std::vector<std::wstring> CollectDesiredShimStems(const std::wstring& dataRoot) {
     std::wstring current = CombinePath(dataRoot, L"current");
     std::vector<std::wstring> dirs = {
@@ -2039,6 +2039,7 @@ std::vector<std::wstring> CollectDesiredShimStems(const std::wstring& dataRoot) 
         CombinePath(CombinePath(current, L"maven"), L"bin"),
         CombinePath(current, L"node"),
         CombinePath(CombinePath(current, L"go"), L"bin"),
+        CombinePath(CombinePath(current, L"rust"), L"bin"),
     };
 
     std::vector<std::wstring> all;

@@ -5,6 +5,38 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.11] - 2026-06-13 — 首帧延迟加载 + ReadyToRun 打包修复
+
+### 优化（Changed）
+- **首帧延迟加载**：设置页、诊断页、配置档案页与日志页改用 `x:Load=\"False\"`，首次导航时再创建控件树，避免非首屏内容拖慢 `MainWindow.InitializeComponent()`。
+- **启动后初始化并行化**：SDK catalog 与 settings 读取在 `Loaded` 后并行启动；环境位置漂移校正改为后台 fire-and-forget，不再串行阻塞首轮交互。
+- **设置读取不强制创建设置页**：启动阶段只应用语言与强调色配置；设置页控件保持延迟加载，打开设置页后再同步 ComboBox、数据目录与更新仓库字段。
+
+### 修复（Fixed）
+- **Release ReadyToRun 打包失败**：CI 打包脚本在 restore 阶段显式传入 `-r win10-x64` 与 `PublishReadyToRun=true`，publish 阶段使用 `--no-restore` 复用 RID 专用 assets，修复 `NETSDK1094`。
+- **精简 shell 环境下 NuGet path1 异常**：打包脚本补齐 `SystemRoot`、`USERPROFILE`、`LOCALAPPDATA`、`TEMP/TMP` 等环境变量兜底，避免 Git Bash/CI 精简环境影响 MSBuild 路径解析。
+
+## [v0.2.10] - 2026-06-13 — Rust SDK 支持 + 启动加速
+
+### 新增（Added）
+- **Rust SDK 完整接入**：SDK 管理、总览卡片、左侧导航、导入、切换、删除、验证、Doctor 与 PATH/shim 均支持 Rust。
+  - 本地导入识别 standalone toolchain 根目录：`bin\rustc.exe`、`bin\cargo.exe`、`bin\rustdoc.exe`。
+  - 支持误选 `bin` 目录时自动回退到 Rust toolchain 根目录。
+  - 不把 `.cargo\bin` rustup proxy 目录误识别为可切换 SDK 根。
+- **Rust 官方下载源**：下载对话框新增 Rust stable x64/arm64。
+  - 使用官方 `rustup-init.exe`，并读取 `.sha256` 校验文件做完整性验证。
+  - 安装时使用临时 `CARGO_HOME` / `RUSTUP_HOME` 与 `--no-modify-path`，不污染用户全局 PATH。
+  - 下载完成后登记真实 toolchain root：`rustup\toolchains\stable-<triple>`。
+
+### 优化（Changed）
+- **启动速度优化**：主窗口首屏路径不再同步递归清理 `data\updates`，改为后台清理，避免历史更新包过多时拖慢启动。
+- **启动路径瘦身**：启动阶段不再同步读取/创建 `settings.json` 只为强调色，先用默认主题显示首帧，Loaded 后按设置校正。
+- **helper/shim 懒解析**：`DevSwitch.Helper.exe` 与 `DevSwitch.Shim.exe` 路径从 AppServices 构造期扫描改为按需解析，减少启动时 `File.Exists` 与父目录遍历。
+- **发布包 ReadyToRun**：CI 打包脚本启用 `PublishReadyToRun=true`，降低 Release 包首次启动 JIT 成本。
+
+### 修复（Fixed）
+- **英文界面状态筛选失效**：状态 ComboBox 改用稳定 `Tag` 解析过滤枚举，不再依赖会被本地化的 `Content` 文案。
+
 ## [v0.2.9] - 2026-06-12 — 强调色自定义 + 诊断误报修复
 
 ### 新增（Added）
@@ -120,6 +152,9 @@
 - GitHub 一键自更新：下载 → 校验 → 覆盖 → 重启，全程保护用户数据目录。
 - 灵活数据目录：便携 / 固定 C 盘 / 自定义三种模式，支持带进度迁移。
 
+[v0.2.11]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.11
+[v0.2.10]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.10
+[v0.2.9]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.9
 [v0.2.8]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.8
 [v0.2.7]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.7
 [v0.2.6]: https://github.com/gongzhujiejie/devswitch/releases/tag/v0.2.6

@@ -112,6 +112,22 @@ public sealed class SdkStatusFilterTests
     }
 
     /// <summary>
+    /// 校验 ComboBox 稳定 Tag 到枚举的解析，避免英文本地化 Content 被误解析为 All。
+    /// </summary>
+    [Theory]
+    [InlineData("All", SdkStatusFilter.All)]
+    [InlineData("InUse", SdkStatusFilter.InUse)]
+    [InlineData("Available", SdkStatusFilter.Available)]
+    [InlineData("Unavailable", SdkStatusFilter.Unavailable)]
+    [InlineData("active", SdkStatusFilter.All)]
+    [InlineData(null, SdkStatusFilter.All)]
+    public void ParseFromComboBoxTagHandlesStableTagsAndFallback(string? tag, SdkStatusFilter expected)
+    {
+        var actual = SdkStatusFilterMatcher.ParseFromComboBoxTag(tag);
+        Assert.Equal(expected, actual);
+    }
+
+    /// <summary>
     /// 校验 ComboBox 中文文案到枚举的解析（与 XAML 中四项一致），未知值回退到 All。
     /// </summary>
     [Theory]

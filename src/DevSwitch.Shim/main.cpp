@@ -5,7 +5,7 @@
 // 依赖库：kernel32（CreateProcessW / GetModuleFileNameW 等），shell32 不需要。
 // NOTE: 合法授权学习使用，仅限本地环境。
 //   设计要点（为何这样写）：
-//   1) PATH 只放一个 shims 目录即可覆盖 java/mvn/node/go 等全部命令，根治系统 PATH 2047 字符上限。
+//   1) PATH 只放一个 shims 目录即可覆盖 java/mvn/node/go/rust 等全部命令，根治系统 PATH 2047 字符上限。
 //   2) shim 不依赖任何环境变量定位 dataRoot——从自身 exe 路径上溯，避免环境漂移导致找不到目标。
 //   3) 切换 SDK 只改 current junction 指向，shim 与 PATH 全程不变，因此切换无需写注册表、无需提权、极快。
 //   4) 交互式程序（jshell、node REPL）依赖继承标准句柄与同控制台，这里不重定向、不开新窗口，保证可交互。
@@ -129,7 +129,7 @@ std::wstring ProbeIn(const std::wstring& dir, const std::wstring& stem) {
     return std::wstring();
 }
 
-// 解析真实目标：按 java/maven/node/go 固定优先级在 current\<type>\bin（node 在 current\node）下探测。
+// 解析真实目标：按 java/maven/node/go/rust 固定优先级在 current\<type>\bin（node 在 current\node）下探测。
 // 返回命中的完整路径；未命中返回空串。
 std::wstring ResolveTarget(const std::wstring& dataRoot, const std::wstring& stem) {
     std::wstring current = Combine(dataRoot, L"current");
@@ -140,6 +140,7 @@ std::wstring ResolveTarget(const std::wstring& dataRoot, const std::wstring& ste
         Combine(Combine(current, L"maven"), L"bin"),
         Combine(current, L"node"),
         Combine(Combine(current, L"go"), L"bin"),
+        Combine(Combine(current, L"rust"), L"bin"),
     };
 
     for (const std::wstring& dir : dirs) {

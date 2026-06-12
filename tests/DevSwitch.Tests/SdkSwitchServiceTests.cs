@@ -34,6 +34,27 @@ public sealed class SdkSwitchServiceTests
     }
 
     [Fact]
+    public async Task SwitchBatchUpdatesActiveRustAndUsesCurrentRustPath()
+    {
+        // NOTE: Rust 切换必须写入 active.rust，并使用 current/rust 作为 helper 管理链接路径。
+        var dataRoot = CreateTemporaryDirectory();
+        var targetRoot = CreateUsableRustRoot();
+        var record = CreateRecord("rust-stable", SdkType.Rust, targetRoot, SdkRecordStatus.Usable);
+        await new SdkCatalogStore().SaveAsync(dataRoot, new SdkCatalog(1, ActiveSdkSet.Empty, new[] { record }));
+        var helper = new FakeHelperClient();
+        var service = CreateService(dataRoot, helper);
+
+        var result = await service.SwitchBatchAsync(SdkType.Rust, record.Id, broadcast: true);
+        var catalog = await new SdkCatalogStore().LoadOrCreateAsync(dataRoot);
+
+        Assert.True(result.Success);
+        Assert.Equal(record.Id, catalog.Active.Rust);
+        var call = Assert.Single(helper.BatchSwitchCalls);
+        Assert.Equal(SdkType.Rust, call.SdkType);
+        Assert.Equal(Path.Combine(dataRoot, "current", "rust"), call.CurrentPath);
+    }
+
+    [Fact]
     public async Task SwitchBatchReturnsFailureWhenHelperFails()
     {
         var dataRoot = CreateTemporaryDirectory();
@@ -228,6 +249,16 @@ public sealed class SdkSwitchServiceTests
         File.WriteAllText(Path.Combine(root, "release"), "JAVA_VERSION=\"21\"");
         File.WriteAllText(Path.Combine(root, "bin", "java.exe"), string.Empty);
         File.WriteAllText(Path.Combine(root, "bin", "javac.exe"), string.Empty);
+        return root;
+    }
+
+    private static string CreateUsableRustRoot()
+    {
+        var root = CreateTemporaryDirectory();
+        Directory.CreateDirectory(Path.Combine(root, "bin"));
+        File.WriteAllText(Path.Combine(root, "bin", "rustc.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(root, "bin", "cargo.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(root, "bin", "rustdoc.exe"), string.Empty);
         return root;
     }
 

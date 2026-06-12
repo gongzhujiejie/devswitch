@@ -27,7 +27,7 @@ public sealed partial class MainWindow : Window
     private readonly MainWindowViewModel viewModel;
     private readonly string dataRoot;
     private readonly DevSwitch.App.Services.AppServices appServices;
-    private readonly LocalSdkImportService localSdkImportService;
+    private readonly SdkImportRegistrationService sdkImportRegistrationService;
     private readonly CancellationTokenSource windowLifetime = new();
     private bool isSidebarExpanded = true;
 
@@ -80,7 +80,7 @@ public sealed partial class MainWindow : Window
 
         Title = "DevSwitch";
         InitializeCustomTitleBar();
-        localSdkImportService = new LocalSdkImportService(this.dataRoot);
+        sdkImportRegistrationService = this.appServices.CreateImportRegistrationService();
         RootGrid.DataContext = viewModel;
 
         InitializeNavigationCaches();
@@ -269,6 +269,7 @@ public sealed partial class MainWindow : Window
             MavenNavButton,
             NodeNavButton,
             GoNavButton,
+            RustNavButton,
             ProfilesNavButton,
             DoctorNavButton,
             LogsNavButton,
@@ -283,6 +284,7 @@ public sealed partial class MainWindow : Window
             MavenIndicator,
             NodeIndicator,
             GoIndicator,
+            RustIndicator,
             ProfilesIndicator,
             DoctorIndicator,
             LogsIndicator,
@@ -297,6 +299,7 @@ public sealed partial class MainWindow : Window
             MavenNavText,
             NodeNavText,
             GoNavText,
+            RustNavText,
             ProfilesNavText,
             DoctorNavText,
             LogsNavText,
@@ -339,6 +342,7 @@ public sealed partial class MainWindow : Window
         ToolTipService.SetToolTip(MavenNavButton, "Maven");
         ToolTipService.SetToolTip(NodeNavButton, "Node.js");
         ToolTipService.SetToolTip(GoNavButton, "Go");
+        ToolTipService.SetToolTip(RustNavButton, "Rust");
         ToolTipService.SetToolTip(ProfilesNavButton, "配置档案");
         ToolTipService.SetToolTip(DoctorNavButton, "环境诊断");
         ToolTipService.SetToolTip(LogsNavButton, "日志");
@@ -383,7 +387,8 @@ public sealed partial class MainWindow : Window
         return button == JavaNavButton
             || button == MavenNavButton
             || button == NodeNavButton
-            || button == GoNavButton;
+            || button == GoNavButton
+            || button == RustNavButton;
     }
 
     /// <summary>
@@ -440,6 +445,9 @@ public sealed partial class MainWindow : Window
             case "Go":
                 ShowSdkCategory("Go", GoNavButton, GoIndicator);
                 break;
+            case "Rust":
+                ShowSdkCategory("Rust", RustNavButton, RustIndicator);
+                break;
         }
     }
 
@@ -461,6 +469,11 @@ public sealed partial class MainWindow : Window
     private void OnGoNavClick(object sender, RoutedEventArgs e)
     {
         ShowSdkCategory("Go", GoNavButton, GoIndicator);
+    }
+
+    private void OnRustNavClick(object sender, RoutedEventArgs e)
+    {
+        ShowSdkCategory("Rust", RustNavButton, RustIndicator);
     }
 
     private void OnProfilesNavClick(object sender, RoutedEventArgs e)
@@ -504,10 +517,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private async void OnRootGridLoaded(object sender, RoutedEventArgs e)
     {
-        await RefreshSdkCatalogAsync();
-        await LoadSettingsIntoUiAsync();
-        // 启动时检测工具目录是否被移动（DEVSWITCH_HOME 漂移），漂移则自动校正环境变量。
-        await CorrectEnvironmentDriftAsync();
+        // 首帧之后再加载磁盘数据；catalog 与 settings 互不依赖，先并行启动以减少可交互后的等待。
+        Task refreshCatalogTask = RefreshSdkCatalogAsync();
+        Task loadSettingsTask = LoadSettingsIntoUiAsync();
+
+        // 环境漂移校正可能触发 helper 进程与 WM_SETTINGCHANGE 广播；后台 fire-and-forget，避免串行卡住 Loaded。
+        _ = CorrectEnvironmentDriftAsync();
+
+        await Task.WhenAll(refreshCatalogTask, loadSettingsTask);
     }
 
     /// <summary>
@@ -571,7 +588,7 @@ public sealed partial class MainWindow : Window
 
         try
         {
-            var result = await localSdkImportService.ImportLocalAsync(selectedPath);
+            var result = await sdkImportRegistrationService.ImportAndVerifyAsync(selectedPath, cancellationToken: windowLifetime.Token);
             if (result.Success && result.Record is not null)
             {
                 ShowImportedSdkCategory(result.Record.Type);
@@ -608,6 +625,9 @@ public sealed partial class MainWindow : Window
                 break;
             case SdkType.Go:
                 ShowSdkCategory("Go", GoNavButton, GoIndicator);
+                break;
+            case SdkType.Rust:
+                ShowSdkCategory("Rust", RustNavButton, RustIndicator);
                 break;
         }
     }
@@ -815,6 +835,26 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>
+    /// 确保 x:Load=False 的非首屏内容已实例化。
+    /// </summary>
+    /// <typeparam name="T">预期的控件类型。</typeparam>
+    /// <param name="elementName">XAML 中的 x:Name。</param>
+    /// <returns>已加载的控件实例。</returns>
+    private T EnsureDeferredContent<T>(string elementName)
+        where T : FrameworkElement
+    {
+        // FindName 会触发 x:Load=False 控件实例化；已加载时直接返回现有实例。
+        if (RootGrid.FindName(elementName) is T content)
+        {
+            // 新加载的内容仍是默认静态文案，立即同步当前语言和强调色选中态。
+            RefreshLocalizedTexts();
+            return content;
+        }
+
+        throw new InvalidOperationException($"无法加载界面区域：{elementName}");
+    }
+
+    /// <summary>
     /// 显示首页。
     /// </summary>
     private void ShowHomeContent()
@@ -879,7 +919,10 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowSettingsContent()
     {
-        SetActiveContent(SettingsContent);
+        var settingsContent = EnsureDeferredContent<ScrollViewer>(nameof(SettingsContent));
+        InitializeAccentSwatches();
+        _ = LoadSettingsIntoUiAsync();
+        SetActiveContent(settingsContent);
     }
 
     // 配置档案视图懒初始化标记：仅首次进入时注入 dataRoot 并加载，避免重复 IO。
@@ -890,13 +933,14 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowProfilesContent()
     {
+        var profilesContent = EnsureDeferredContent<Views.ProfilesView>(nameof(ProfilesContent));
         if (!isProfilesInitialized)
         {
-            ProfilesContent.Initialize(dataRoot);
+            profilesContent.Initialize(dataRoot);
             isProfilesInitialized = true;
         }
 
-        SetActiveContent(ProfilesContent);
+        SetActiveContent(profilesContent);
     }
 
     /// <summary>
@@ -904,8 +948,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowLogsContent()
     {
-        LogsContent.Initialize(dataRoot);
-        SetActiveContent(LogsContent);
+        var logsContent = EnsureDeferredContent<Views.LogsView>(nameof(LogsContent));
+        logsContent.Initialize(dataRoot);
+        SetActiveContent(logsContent);
     }
 
     /// <summary>

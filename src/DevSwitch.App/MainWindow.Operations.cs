@@ -9,6 +9,7 @@
 //       - 错误统一走 ContentDialog，文案中文、含 errorCode 便于排错。
 //       - helper 缺失时捕获 HelperUnavailableException 给出友好提示，不崩溃。
 
+using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using DevSwitch.App.Models;
@@ -50,7 +51,7 @@ public sealed partial class MainWindow
     // ===================== SDK 行操作 =====================
 
     /// <summary>
-    /// 状态筛选下拉选择变更：把中文文案解析为 <see cref="SdkStatusFilter"/> 写回 ViewModel，
+    /// 状态筛选下拉选择变更：把 ComboBoxItem.Tag 的稳定值解析为 <see cref="SdkStatusFilter"/> 写回 ViewModel，
     /// ViewModel 内部会重算可见集合并通知列表绑定刷新。
     /// </summary>
     private void OnStatusFilterChanged(object sender, SelectionChangedEventArgs e)
@@ -68,9 +69,9 @@ public sealed partial class MainWindow
             return;
         }
 
-        // ComboBoxItem.Content 默认是 string；以中文文案为准解析，未知值回退到 All。
-        string? text = item.Content?.ToString();
-        viewModel.SelectedStatusFilter = SdkStatusFilterMatcher.ParseFromComboBoxText(text);
+        // ComboBoxItem.Tag 是稳定业务值；Content 会随本地化变化，不能用于解析过滤条件。
+        string? tag = item.Tag?.ToString();
+        viewModel.SelectedStatusFilter = SdkStatusFilterMatcher.ParseFromComboBoxTag(tag);
     }
 
     /// <summary>
@@ -174,13 +175,91 @@ public sealed partial class MainWindow
                 _ => command.Message,
             };
 
-            // 把命令验证结果回写到行模型：失败时徽章立即变"不可用"并退出当前过滤组。
-            // 仅 Verified 视为成功；ParseFailed/NotStarted/TimedOut/NonZeroExit 全部钳为"不可用"。
+            // 把命令验证结果回写到 catalog：成功时刷新真实版本和 LastVerifiedAt；失败时标记不可用。
+            // 刷新 ViewModel 后列表版本列、状态徽章和过滤器都会与 sdks.json 保持一致。
+            await PersistCommandVerificationResultAsync(row, command);
             bool verifiedOk = command.Outcome == CommandVerificationOutcome.Verified;
             viewModel.ApplyCommandVerificationResult(row.Id, verifiedOk);
+            await RefreshSdkCatalogAsync();
 
             await ShowSimpleDialogAsync("命令验证结果", commandDetail);
         });
+    }
+
+    /// <summary>
+    /// 将命令验证结果回写到 sdks.json，确保版本列和状态在刷新后持久一致。
+    /// </summary>
+    private async Task PersistCommandVerificationResultAsync(SdkVersionRow row, CommandVerificationResult command)
+    {
+        var store = appServices.CatalogStore;
+        var catalog = await store.LoadOrCreateAsync(dataRoot);
+        var updated = catalog with
+        {
+            Items = catalog.Items.Select(item =>
+            {
+                if (!string.Equals(item.Id, row.Id, StringComparison.OrdinalIgnoreCase))
+                {
+                    return item;
+                }
+
+                bool verifiedOk = command.Outcome == CommandVerificationOutcome.Verified && !string.IsNullOrWhiteSpace(command.ParsedVersion);
+                var nextStatus = verifiedOk
+                    ? (item.Status == SdkRecordStatus.Active ? SdkRecordStatus.Active : SdkRecordStatus.Usable)
+                    : SdkRecordStatus.Unavailable;
+                return item with
+                {
+                    Version = verifiedOk ? command.ParsedVersion! : item.Version,
+                    Status = nextStatus,
+                    LastVerifiedAt = DateTimeOffset.UtcNow,
+                };
+            }).ToArray(),
+        };
+        await store.SaveAsync(dataRoot, updated);
+    }
+
+    /// <summary>
+    /// 行菜单「打开所在位置」：在资源管理器中定位 SDK 根目录，不阻塞 UI。
+    /// </summary>
+    private async void OnOpenSdkLocationClick(object sender, RoutedEventArgs e)
+    {
+        if (!TryGetRow(sender, out var row))
+        {
+            return;
+        }
+
+        if (!SdkLocationExplorer.TryCreateSelectArguments(row.Path, out var fullPath, out var arguments, out var errorMessage))
+        {
+            var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
+            string title = string.IsNullOrWhiteSpace(row.Path)
+                ? loc["sdk.openLocation.emptyTitle"]
+                : loc["sdk.openLocation.missingTitle"];
+            string message = string.IsNullOrWhiteSpace(fullPath)
+                ? loc["sdk.openLocation.emptyMessage"]
+                : string.Format(loc["sdk.openLocation.missingMessage"], fullPath);
+            if (!string.IsNullOrWhiteSpace(errorMessage) && string.IsNullOrWhiteSpace(fullPath))
+            {
+                message = errorMessage;
+            }
+
+            await ShowSimpleDialogAsync(title, message);
+            return;
+        }
+
+        try
+        {
+            // explorer.exe 只负责打开窗口，绝不等待退出；路径已预先存在性校验，避免创建空 SDK 目录掩盖问题。
+            Process.Start(new ProcessStartInfo("explorer.exe")
+            {
+                Arguments = arguments!,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+            });
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException)
+        {
+            var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
+            await ShowSimpleDialogAsync(loc["sdk.openLocation.failedTitle"], ex.Message);
+        }
     }
 
     /// <summary>
@@ -683,7 +762,8 @@ public sealed partial class MainWindow
         "Maven" => SdkType.Maven,
         "Node.js" => SdkType.Node,
         "Go" => SdkType.Go,
-        _ => SdkType.Java,
+        "Rust" => SdkType.Rust,
+        _ => SdkType.Unknown,
     };
 
     /// <summary>
@@ -968,6 +1048,7 @@ public sealed partial class MainWindow
         SdkType.Maven => "maven",
         SdkType.Node => "node",
         SdkType.Go => "go",
+        SdkType.Rust => "rust",
         _ => "sdk",
     };
 
@@ -1003,7 +1084,8 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShowDoctorContent()
     {
-        SetActiveContent(DoctorContent);
+        var doctorContent = EnsureDeferredContent<Grid>(nameof(DoctorContent));
+        SetActiveContent(doctorContent);
     }
 
     /// <summary>
@@ -1186,29 +1268,44 @@ public sealed partial class MainWindow
 
             isSettingsInitializing = true;
 
-            // 语言：按 Tag 匹配选项，并按已保存语言应用到 LocalizationManager（auto 按系统区域解析）。
-            // ApplyFromSettings 若与当前语言不同会触发 LanguageChanged，自动刷新界面文案。
-            SelectComboBoxByTag(LanguageComboBox, settings.Language);
+            // 语言：启动阶段必须立即应用到 LocalizationManager；设置页控件可能因 x:Load=False 尚未创建。
+            // ApplyFromSettings 若与当前语言不同会触发 LanguageChanged，自动刷新已加载界面文案。
             DevSwitch.App.Localization.LocalizationManager.Instance.ApplyFromSettings(settings.Language);
-            UpdateLanguageStatus();
+            if (LanguageComboBox is not null)
+            {
+                SelectComboBoxByTag(LanguageComboBox, settings.Language);
+                UpdateLanguageStatus();
+            }
 
-            // 强调色：启动时 App.xaml.cs 已先应用一次，这里只同步设置页选中态；容错解析未知值。
+            // 强调色：启动时 App.xaml.cs 已先应用默认色，这里按 settings 校正；色块控件未加载时只保存 key。
             selectedAccentKey = AccentPalette.Resolve(settings.AccentColor).Key;
             AccentThemeService.Apply(selectedAccentKey);
-            UpdateAccentSwatchSelection();
+            if (AccentSwatchItems is not null)
+            {
+                UpdateAccentSwatchSelection();
+            }
 
-            // 下载并发数：按 Tag 匹配，缺省 4。
-            SelectComboBoxByTag(DownloadParallelismComboBox, settings.Download.Parallelism.ToString());
-            DownloadParallelismStatusText.Text = $"当前并发数：{settings.Download.Parallelism}";
+            // 下载并发数：设置页首次打开后再同步 ComboBox，避免为了显示设置强制实例化整页。
+            if (DownloadParallelismComboBox is not null)
+            {
+                SelectComboBoxByTag(DownloadParallelismComboBox, settings.Download.Parallelism.ToString());
+                DownloadParallelismStatusText.Text = $"当前并发数：{settings.Download.Parallelism}";
+            }
 
-            // 数据目录：显示当前生效路径与是否自定义。
-            UpdateDataRootText();
+            // 数据目录与更新配置属于设置页文案；控件未加载时跳过，打开设置页后会再次调用本方法补齐。
+            if (DataRootPathText is not null)
+            {
+                UpdateDataRootText();
+            }
 
-            // 更新：回填 GitHub 仓库与当前版本号。仓库为空时用默认仓库占位，方便用户直接检查更新。
-            UpdateRepositoryTextBox.Text = string.IsNullOrWhiteSpace(settings.Update.Repository)
-                ? "gongzhujiejie/devswitch"
-                : settings.Update.Repository;
-            UpdateCurrentVersionText.Text = $"DevSwitch 当前版本 {CurrentAppVersion}";
+            if (UpdateRepositoryTextBox is not null)
+            {
+                // 更新：回填 GitHub 仓库与当前版本号。仓库为空时用默认仓库占位，方便用户直接检查更新。
+                UpdateRepositoryTextBox.Text = string.IsNullOrWhiteSpace(settings.Update.Repository)
+                    ? "gongzhujiejie/devswitch"
+                    : settings.Update.Repository;
+                UpdateCurrentVersionText.Text = $"DevSwitch 当前版本 {CurrentAppVersion}";
+            }
         }
         catch
         {

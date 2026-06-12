@@ -252,6 +252,7 @@ public sealed class SdkDeletionService
             SdkType.Maven => active.Maven,
             SdkType.Node => active.Node,
             SdkType.Go => active.Go,
+            SdkType.Rust => active.Rust,
             _ => null,
         };
 
@@ -266,6 +267,7 @@ public sealed class SdkDeletionService
             SdkType.Maven => active with { Maven = null },
             SdkType.Node => active with { Node = null },
             SdkType.Go => active with { Go = null },
+            SdkType.Rust => active with { Rust = null },
             _ => active,
         };
     }

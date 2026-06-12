@@ -14,15 +14,15 @@ namespace DevSwitch.Tests;
 public sealed class SdkCategorySummaryBuilderTests
 {
     // 固定期望顺序，多个用例复用。
-    private static readonly string[] ExpectedOrder = { "Java", "Maven", "Node.js", "Go" };
+    private static readonly string[] ExpectedOrder = { "Java", "Maven", "Node.js", "Go", "Rust" };
 
     [Fact]
-    public void EmptyInputProducesFourPlaceholderSummaries()
+    public void EmptyInputProducesFivePlaceholderSummaries()
     {
-        // 空输入：四类全部产出占位汇总。
+        // 空输入：所有支持分类全部产出占位汇总。
         var result = SdkCategorySummaryBuilder.Build(System.Array.Empty<SdkSummaryInput>());
 
-        Assert.Equal(4, result.Count);
+        Assert.Equal(5, result.Count);
         Assert.All(result, s =>
         {
             Assert.Equal(0, s.TotalCount);
@@ -35,10 +35,10 @@ public sealed class SdkCategorySummaryBuilderTests
     [Fact]
     public void NullInputIsTreatedAsEmpty()
     {
-        // null 输入应等价于空集合，仍返回 4 条占位。
+        // null 输入应等价于空集合，仍返回所有支持分类的占位。
         var result = SdkCategorySummaryBuilder.Build(null!);
 
-        Assert.Equal(4, result.Count);
+        Assert.Equal(5, result.Count);
         Assert.All(result, s => Assert.Equal("尚未导入", s.SummaryLine));
     }
 
@@ -84,9 +84,9 @@ public sealed class SdkCategorySummaryBuilderTests
     }
 
     [Fact]
-    public void AlwaysReturnsFourCategoriesInFixedOrder()
+    public void AlwaysReturnsFiveCategoriesInFixedOrder()
     {
-        // 即使只提供部分分类的数据，也始终按固定顺序返回 4 条。
+        // 即使只提供部分分类的数据，也始终按固定顺序返回所有支持分类。
         var rows = new List<SdkSummaryInput>
         {
             new("Go", "Go 1.22", "使用中"),
@@ -114,6 +114,7 @@ public sealed class SdkCategorySummaryBuilderTests
         var maven = result.Single(s => s.Category == "Maven");
         var node = result.Single(s => s.Category == "Node.js");
         var go = result.Single(s => s.Category == "Go");
+        var rust = result.Single(s => s.Category == "Rust");
 
         Assert.Equal(2, java.TotalCount);
         Assert.Equal(0, maven.TotalCount);      // Maven 完全不受 Java/Node 影响。
@@ -122,6 +123,27 @@ public sealed class SdkCategorySummaryBuilderTests
         Assert.True(node.HasActive);
         Assert.Equal("Node 20", node.ActiveName);
         Assert.Equal(0, go.TotalCount);
+        Assert.Equal(0, rust.TotalCount);
+        Assert.Equal("尚未导入", rust.SummaryLine);
+    }
+
+    [Fact]
+    public void RustCategoryWithActiveVersionReportsActiveName()
+    {
+        // Rust 必须和其它 SDK 分类一样独立聚合，避免新增类型只出现在列表、不出现在总览。
+        var rows = new List<SdkSummaryInput>
+        {
+            new("Rust", "Rust 1.78.0", "使用中"),
+            new("Rust", "Rust 1.77.2", "可用"),
+        };
+
+        var result = SdkCategorySummaryBuilder.Build(rows);
+        var rust = result.Single(s => s.Category == "Rust");
+
+        Assert.Equal(2, rust.TotalCount);
+        Assert.True(rust.HasActive);
+        Assert.Equal("Rust 1.78.0", rust.ActiveName);
+        Assert.Equal("共 2 个版本 · 使用中 Rust 1.78.0", rust.SummaryLine);
     }
 
     [Fact]

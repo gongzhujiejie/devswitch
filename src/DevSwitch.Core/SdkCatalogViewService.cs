@@ -153,6 +153,7 @@ public sealed class SdkCatalogViewService
             SdkType.Maven => active.Maven,
             SdkType.Node => active.Node,
             SdkType.Go => active.Go,
+            SdkType.Rust => active.Rust,
             _ => null,
         };
     }
@@ -168,6 +169,7 @@ public sealed class SdkCatalogViewService
             SdkType.Maven => "Maven",
             SdkType.Node => "Node.js",
             SdkType.Go => "Go",
+            SdkType.Rust => "Rust",
             _ => "SDK",
         };
     }
@@ -183,6 +185,7 @@ public sealed class SdkCatalogViewService
             "Maven" => SdkType.Maven,
             "Node.js" => SdkType.Node,
             "Go" => SdkType.Go,
+            "Rust" => SdkType.Rust,
             _ => SdkType.Unknown,
         };
     }

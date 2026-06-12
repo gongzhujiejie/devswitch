@@ -108,6 +108,7 @@ public sealed class SdkCurrentPathProvider : ISdkCurrentPathProvider
             SdkType.Maven => "maven",
             SdkType.Node => "node",
             SdkType.Go => "go",
+            SdkType.Rust => "rust",
             _ => "sdk",
         };
     }
@@ -449,6 +450,7 @@ public sealed class SdkSwitchService
             SdkType.Maven => active.Maven,
             SdkType.Node => active.Node,
             SdkType.Go => active.Go,
+            SdkType.Rust => active.Rust,
             _ => null,
         };
     }
@@ -461,6 +463,7 @@ public sealed class SdkSwitchService
             SdkType.Maven => active with { Maven = recordId },
             SdkType.Node => active with { Node = recordId },
             SdkType.Go => active with { Go = recordId },
+            SdkType.Rust => active with { Rust = recordId },
             _ => active,
         };
     }

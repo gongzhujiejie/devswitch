@@ -106,6 +106,37 @@ public sealed class SourcesSdkVersionSourceTests
     }
 
     [Fact]
+    public async Task RustupSourceBuildsOfficialWindowsUrlsForX64()
+    {
+        // NOTE: Rustup 官方 Windows 安装入口固定在 static.rust-lang.org/rustup/dist/{triple}/rustup-init.exe。
+        var source = new RustupSource();
+
+        var versions = await source.ListVersionsAsync(SdkArchitecture.X64);
+
+        var version = Assert.Single(versions);
+        Assert.Equal(SdkType.Rust, version.SdkType);
+        Assert.Equal("rustup", version.Distribution);
+        Assert.Equal("stable", version.Version);
+        Assert.Equal(SdkArchitecture.X64, version.Architecture);
+        Assert.Equal("https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe", version.DownloadUrl);
+        Assert.Equal("https://static.rust-lang.org/rustup/dist/x86_64-pc-windows-msvc/rustup-init.exe.sha256", version.ChecksumUrl);
+        Assert.Contains("Rust stable", version.DisplayName);
+    }
+
+    [Fact]
+    public async Task RustupSourceBuildsOfficialWindowsUrlsForArm64()
+    {
+        var source = new RustupSource();
+
+        var versions = await source.ListVersionsAsync(SdkArchitecture.Arm64);
+
+        var version = Assert.Single(versions);
+        Assert.Equal(SdkArchitecture.Arm64, version.Architecture);
+        Assert.Equal("https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe", version.DownloadUrl);
+        Assert.Equal("https://static.rust-lang.org/rustup/dist/aarch64-pc-windows-msvc/rustup-init.exe.sha256", version.ChecksumUrl);
+    }
+
+    [Fact]
     public async Task CatalogQueriesOnlyMatchingSdkType()
     {
         var node = HttpSdkVersionSource.CreateNode(StaticFetcher(NodeJson));

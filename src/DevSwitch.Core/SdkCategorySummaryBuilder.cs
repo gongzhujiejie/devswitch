@@ -1,4 +1,4 @@
-// 文件用途：定义 SDK 分类汇总构建器（纯逻辑），按固定四类聚合输入行，产出总览页卡片数据。
+// 文件用途：定义 SDK 分类汇总构建器（纯逻辑），按固定支持分类聚合输入行，产出总览页卡片数据。
 // 创建/修改日期：2026-06-09
 // 语言版本要求：C# 12 / .NET 8+
 // 依赖库：仅 BCL（System、System.Collections.Generic、System.Linq）。
@@ -11,7 +11,7 @@ namespace DevSwitch.Core;
 
 /// <summary>
 /// SDK 分类汇总构建器：把扁平的版本行（<see cref="SdkSummaryInput"/>）聚合成
-/// 固定四类（Java / Maven / Node.js / Go）的总览卡片数据。
+/// 固定支持分类（Java / Maven / Node.js / Go / Rust）的总览卡片数据。
 /// </summary>
 public static class SdkCategorySummaryBuilder
 {
@@ -25,14 +25,14 @@ public static class SdkCategorySummaryBuilder
     private const string NoActiveName = "未设置";
 
     /// <summary>
-    /// 固定分类顺序：始终按此顺序产出 4 条，即使某类 0 个也要占位一条。
+    /// 固定分类顺序：始终按此顺序产出所有支持分类，即使某类 0 个也要占位一条。
     /// NOTE: 顺序与总览页卡片排列一致，集中定义避免多处硬编码。
     /// </summary>
-    private static readonly IReadOnlyList<string> CategoryOrder = new[] { "Java", "Maven", "Node.js", "Go" };
+    private static readonly IReadOnlyList<string> CategoryOrder = new[] { "Java", "Maven", "Node.js", "Go", "Rust" };
 
     /// <summary>
     /// 各分类对应的 Segoe MDL2 Assets 图标 glyph。
-    /// NOTE: 当前四类统一用 "\uE8B7" 占位，主代理后续可按需替换为各自专属 glyph。
+    /// NOTE: 当前分类统一用 "\uE8B7" 占位，后续可按需替换为各自专属 glyph。
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> CategoryGlyphs = new Dictionary<string, string>
     {
@@ -40,13 +40,14 @@ public static class SdkCategorySummaryBuilder
         ["Maven"] = "\uE8B7",
         ["Node.js"] = "\uE8B7",
         ["Go"] = "\uE8B7",
+        ["Rust"] = "\uE8B7",
     };
 
     /// <summary>
-    /// 按固定四类聚合输入行，输出每类的汇总。
+    /// 按固定支持分类聚合输入行，输出每类的汇总。
     /// </summary>
     /// <param name="rows">全部版本行；为 null 时按空集合处理。</param>
-    /// <returns>始终为 4 条，顺序固定 Java / Maven / Node.js / Go。</returns>
+    /// <returns>始终包含所有支持分类，顺序固定 Java / Maven / Node.js / Go / Rust。</returns>
     public static IReadOnlyList<SdkCategorySummary> Build(IReadOnlyList<SdkSummaryInput> rows)
     {
         // 容错：null 输入视为空集合，保证调用方无需做空判断。
@@ -54,7 +55,7 @@ public static class SdkCategorySummaryBuilder
 
         var result = new List<SdkCategorySummary>(CategoryOrder.Count);
 
-        // 始终按固定顺序遍历四类，确保即使某类没有任何行也会产出一条占位汇总。
+        // 始终按固定顺序遍历支持分类，确保即使某类没有任何行也会产出一条占位汇总。
         foreach (var category in CategoryOrder)
         {
             // 仅筛选属于当前分类的行，避免跨类串台（例如 Java 行不计入 Maven）。

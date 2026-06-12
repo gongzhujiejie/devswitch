@@ -62,6 +62,18 @@ public sealed class SdkVerificationServiceTests
         Assert.Equal("1.22.0", version);
     }
 
+    [Theory]
+    [InlineData("rustc 1.78.0 (9b00956e5 2024-04-29)", "1.78.0")]
+    [InlineData("rustc 1.80.0-nightly (abc123 2024-05-01)", "1.80.0-nightly")]
+    [InlineData("rustc 1.79.0-beta (abc123 2024-05-01)", "1.79.0-beta")]
+    public void ParseVersionExtractsRustVersion(string stdout, string expected)
+    {
+        // NOTE: Rust 版本以 rustc 输出为准；stable/nightly/beta 都应保留语义化后缀。
+        var version = SdkVerificationService.ParseVersion(SdkType.Rust, stdout, string.Empty);
+
+        Assert.Equal(expected, version);
+    }
+
     [Fact]
     public void ParseVersionReturnsNullForUnparseableOutput()
     {
@@ -172,6 +184,31 @@ public sealed class SdkVerificationServiceTests
         Assert.Equal(new[] { "version" }, args);
     }
 
+    [Fact]
+    public void ResolveVersionCommandReturnsAbsoluteRustcExecutable()
+    {
+        // Rust 命令验证必须跑记录自身 bin/rustc.exe，避免被用户全局 .cargo/bin proxy 遮蔽。
+        var (fileName, args) = SdkVerificationService.ResolveVersionCommand(SdkType.Rust, "C:\\tools\\rust-stable");
+
+        Assert.Equal(Path.Combine("C:\\tools\\rust-stable", "bin", "rustc.exe"), fileName);
+        Assert.Equal(new[] { "--version" }, args);
+    }
+
+    [Fact]
+    public void GetRequiredKeyFilesReturnsRustToolchainExecutables()
+    {
+        var required = SdkVerificationService.GetRequiredKeyFiles(SdkType.Rust);
+
+        Assert.Equal(
+            new[]
+            {
+                Path.Combine("bin", "rustc.exe"),
+                Path.Combine("bin", "cargo.exe"),
+                Path.Combine("bin", "rustdoc.exe"),
+            },
+            required);
+    }
+
     // === 命令验证（fake runner）===
 
     [Fact]
@@ -211,6 +248,25 @@ public sealed class SdkVerificationServiceTests
 
         Assert.Equal(Path.Combine(root, "bin", "mvn.cmd"), runner.LastFileName);
         Assert.NotEqual("mvn", runner.LastFileName);
+    }
+
+    [Fact]
+    public async Task RunCommandVerificationUsesRecordPathForRust()
+    {
+        // Rust 同理：必须跑记录目录下的 rustc.exe，不依赖系统 PATH 或 .cargo/bin proxy。
+        const string root = "C:\\tools\\rust-stable";
+        var record = NewRustRecord(root);
+        var runner = new FakeCommandRunner(new SdkCommandResult(
+            Started: true, ExitCode: 0,
+            StdOut: "rustc 1.78.0 (9b00956e5 2024-04-29)",
+            StdErr: string.Empty, TimedOut: false));
+        var service = new SdkVerificationService(new FakeLinkInspector(CurrentLinkInfo.Missing), runner);
+
+        var result = await service.RunCommandVerificationAsync(record);
+
+        Assert.Equal(Path.Combine(root, "bin", "rustc.exe"), runner.LastFileName);
+        Assert.Equal(CommandVerificationOutcome.Verified, result.Outcome);
+        Assert.Equal("1.78.0", result.ParsedVersion);
     }
 
     [Fact]
@@ -285,6 +341,19 @@ public sealed class SdkVerificationServiceTests
         Name: "Apache Maven 3.9.6",
         Version: "3.9.6",
         Distribution: "apache",
+        Architecture: SdkArchitecture.X64,
+        Source: SdkSourceKind.External,
+        Path: path,
+        Status: SdkRecordStatus.Unverified,
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        LastVerifiedAt: null);
+
+    private static SdkRecord NewRustRecord(string path) => new(
+        Id: "rust-test",
+        Type: SdkType.Rust,
+        Name: "Rust 1.78.0",
+        Version: "1.78.0",
+        Distribution: "rustup",
         Architecture: SdkArchitecture.X64,
         Source: SdkSourceKind.External,
         Path: path,

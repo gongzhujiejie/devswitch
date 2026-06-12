@@ -84,6 +84,7 @@ public sealed class EnvironmentLayoutTests
                 @"C:\Users\dev\AppData\Local\DevSwitch\current\maven\bin",
                 @"C:\Users\dev\AppData\Local\DevSwitch\current\node",
                 @"C:\Users\dev\AppData\Local\DevSwitch\current\go\bin",
+                @"C:\Users\dev\AppData\Local\DevSwitch\current\rust\bin",
             },
             entries);
 
@@ -110,6 +111,7 @@ public sealed class EnvironmentLayoutTests
                 @"%DEVSWITCH_HOME%\current\maven\bin",
                 @"%DEVSWITCH_HOME%\current\node",
                 @"%DEVSWITCH_HOME%\current\go\bin",
+                @"%DEVSWITCH_HOME%\current\rust\bin",
             },
             entries);
     }
@@ -128,7 +130,7 @@ public sealed class EnvironmentLayoutTests
 
         var result = EnvironmentLayout.MergeManagedPathEntries(existing, managed);
 
-        // 已存在的 java\bin 不重复添加；其余三个追加到末尾。
+        // 已存在的 java\bin 不重复添加；其余四个追加到末尾。
         Assert.True(result.Changed);
         Assert.Equal(
             new[]
@@ -136,6 +138,7 @@ public sealed class EnvironmentLayoutTests
                 @"%DEVSWITCH_HOME%\current\maven\bin",
                 @"%DEVSWITCH_HOME%\current\node",
                 @"%DEVSWITCH_HOME%\current\go\bin",
+                @"%DEVSWITCH_HOME%\current\rust\bin",
             },
             result.Added);
 
@@ -149,6 +152,7 @@ public sealed class EnvironmentLayoutTests
                 @"%DEVSWITCH_HOME%\current\maven\bin",
                 @"%DEVSWITCH_HOME%\current\node",
                 @"%DEVSWITCH_HOME%\current\go\bin",
+                @"%DEVSWITCH_HOME%\current\rust\bin",
             },
             result.Entries);
     }
@@ -265,6 +269,7 @@ public sealed class EnvironmentLayoutTests
                 @"%DEVSWITCH_HOME%\current\maven\bin",
                 @"%DEVSWITCH_HOME%\current\node",
                 @"%DEVSWITCH_HOME%\current\go\bin",
+                @"%DEVSWITCH_HOME%\current\rust\bin",
             },
             result.Added);
         Assert.Equal(
@@ -274,6 +279,7 @@ public sealed class EnvironmentLayoutTests
                 @"%DEVSWITCH_HOME%\current\maven\bin",
                 @"%DEVSWITCH_HOME%\current\node",
                 @"%DEVSWITCH_HOME%\current\go\bin",
+                @"%DEVSWITCH_HOME%\current\rust\bin",
                 @"C:\Windows\System32",
                 @"C:\external\jdk\bin",
             },

@@ -45,6 +45,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
             "Maven",
             "Node.js",
             "Go",
+            "Rust",
         };
 
         Versions = new ObservableCollection<SdkVersionRow>();

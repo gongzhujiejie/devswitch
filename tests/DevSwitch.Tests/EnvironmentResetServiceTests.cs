@@ -31,9 +31,9 @@ public sealed class EnvironmentResetServiceTests
         // 移除了托管 PATH 片段（fake 仅回报 1 条）。
         Assert.Single(result.RemovedPathEntries);
         Assert.Equal(1, envHelper.RemoveCalls.Count);
-        // 移除时传入托管片段集合（占位符旧格式 4 条 + 绝对路径新格式 4 条 = 8 条），绝不传用户其它项。
+        // 移除时传入托管片段集合（占位符旧格式 5 条 + 绝对路径新格式 5 条 = 10 条），绝不传用户其它项。
         // 兼容历史用占位符初始化的用户与新版用绝对路径初始化的用户。
-        Assert.Equal(8, envHelper.RemoveCalls[0].Count);
+        Assert.Equal(10, envHelper.RemoveCalls[0].Count);
         // 清除了核心托管变量。
         Assert.Contains("DEVSWITCH_HOME", result.RemovedVariables);
         Assert.Contains("JAVA_HOME", result.RemovedVariables);
@@ -45,7 +45,7 @@ public sealed class EnvironmentResetServiceTests
     }
 
     [Fact]
-    public async Task ResetRemovesAllFourCurrentLinksWithoutTouchingTargets()
+    public async Task ResetRemovesAllFiveCurrentLinksWithoutTouchingTargets()
     {
         var dataRoot = CreateTemporaryDirectory();
         await new SdkCatalogStore().SaveAsync(dataRoot, SdkCatalog.CreateEmpty());
@@ -56,9 +56,9 @@ public sealed class EnvironmentResetServiceTests
         var result = await service.ResetAsync(dataRoot);
 
         Assert.True(result.Success);
-        // java/maven/node/go 四个 current 入口都尝试移除。
-        Assert.Equal(4, link.RemoveCalls.Count);
-        Assert.Equal(4, result.RemovedCurrentLinks.Count);
+        // java/maven/node/go/rust 五个 current 入口都尝试移除。
+        Assert.Equal(5, link.RemoveCalls.Count);
+        Assert.Equal(5, result.RemovedCurrentLinks.Count);
     }
 
     [Fact]

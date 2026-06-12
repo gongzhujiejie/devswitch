@@ -127,6 +127,7 @@ public sealed class LocalSdkImportService
             SdkType.Maven => "Maven",
             SdkType.Node => "Node.js",
             SdkType.Go => "Go",
+            SdkType.Rust => "Rust",
             _ => "SDK"
         };
     }
@@ -139,6 +140,7 @@ public sealed class LocalSdkImportService
             SdkType.Maven => "apache-maven",
             SdkType.Node => "nodejs",
             SdkType.Go => "go",
+            SdkType.Rust => "rustup",
             _ => "unknown"
         };
     }
@@ -151,6 +153,7 @@ public sealed class LocalSdkImportService
             SdkType.Maven => "maven",
             SdkType.Node => "node",
             SdkType.Go => "go",
+            SdkType.Rust => "rust",
             _ => "sdk"
         };
     }

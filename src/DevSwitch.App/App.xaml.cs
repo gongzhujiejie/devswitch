@@ -77,37 +77,13 @@ public partial class App : Application
 
             StartupLog.Write($"Resolved data root: {dataRoot}");
 
-            // 启动即清理：自更新留下的 data\updates\<version>\ 暂存仅在「下载→覆盖→重启」期间需要，
-            // 主程序此刻已重启，意味着 updater 必然已退出，所有历史版本的更新包都可安全释放，
-            // 避免磁盘占用随版本累积。清理失败不阻塞启动（DataRootMaintenance 内部已吞异常）。
-            try
-            {
-                DataRootMaintenance.PurgeUpdatesStagingDirectory(dataRoot);
-                StartupLog.Write("Updates staging directory purged.");
-            }
-            catch (Exception purgeEx)
-            {
-                // 兜底：理论上 PurgeUpdatesStagingDirectory 已吞所有 IO 异常；这里再加一层保险。
-                StartupLog.Write("Purge updates staging failed (ignored).", purgeEx);
-            }
+            // 首屏优先：updates 暂存清理可能递归删除大量文件，移到窗口激活后后台执行，避免阻塞可见首帧。
+            ScheduleUpdatesCleanup(dataRoot);
 
-            // 启动即应用已保存的强调色：在构造 MainWindow 之前完成，确保首帧即为目标配色。
-            // 同步读取 settings.json 仅取 AccentColor 一个标量；任何失败都回退默认色，绝不阻塞启动。
-            try
-            {
-                var settings = DevSwitchSettingsStore.LoadOrCreateAsync(dataRoot)
-                    .GetAwaiter().GetResult();
-                AccentThemeService.Apply(settings.AccentColor);
-                StartupLog.Write($"Accent color applied: {settings.AccentColor}.");
-            }
-            catch (Exception accentEx)
-            {
-                // 读取/解析失败时回退默认强调色，保证窗口仍以一致配色启动。
-                StartupLog.Write("Apply accent color failed, falling back to default.", accentEx);
-                AccentThemeService.Apply(AccentPalette.DefaultKey);
-            }
+            // 首帧先使用默认强调色，避免在 UI 启动线程同步读取/创建 settings.json；Loaded 后会读取设置并校正主题。
+            AccentThemeService.Apply(AccentPalette.DefaultKey);
 
-            // 组合根：集中创建后端服务工厂与共享依赖（catalog store、HttpClient、helper 路径解析）。
+            // 组合根：集中创建后端服务工厂与共享依赖（catalog store、HttpClient；helper/shim 路径按需懒解析）。
             var appServices = new AppServices(dataRoot);
             var catalogProvider = new FileSdkCatalogProvider(dataRoot, appServices.CatalogStore);
             var viewModel = new MainWindowViewModel(catalogProvider);
@@ -123,6 +99,26 @@ public partial class App : Application
             StartupLog.Write("OnLaunched failed.", ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// 将更新暂存目录清理放到后台执行，避免递归 IO 阻塞主窗口首帧显示。
+    /// </summary>
+    private static void ScheduleUpdatesCleanup(string dataRoot)
+    {
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            try
+            {
+                DataRootMaintenance.PurgeUpdatesStagingDirectory(dataRoot);
+                StartupLog.Write("Updates staging directory purged in background.");
+            }
+            catch (Exception purgeEx)
+            {
+                // 兜底：理论上 PurgeUpdatesStagingDirectory 已吞所有 IO 异常；这里再加一层保险。
+                StartupLog.Write("Background purge updates staging failed (ignored).", purgeEx);
+            }
+        });
     }
 
     /// <summary>
