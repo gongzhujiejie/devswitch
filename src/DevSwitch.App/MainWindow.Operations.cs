@@ -16,8 +16,11 @@ using DevSwitch.App.Services;
 using DevSwitch.Core;
 using DevSwitch.Downloader;
 using DevSwitch.Sources;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace DevSwitch.App;
 
@@ -40,6 +43,9 @@ public sealed partial class MainWindow
 
     // 设置初始化标记：避免在代码设置 ComboBox 初值时误触发持久化。
     private bool isSettingsInitializing;
+
+    // 当前选中的强调色 key；色块按钮点击后即时应用并写入 settings.json。
+    private string selectedAccentKey = AccentPalette.DefaultKey;
 
     // ===================== SDK 行操作 =====================
 
@@ -1064,6 +1070,112 @@ public sealed partial class MainWindow
     // ===================== 设置页 =====================
 
     /// <summary>
+    /// 初始化强调色色块列表。
+    /// 色块使用普通 Button + Border 绘制，不依赖第三方控件；按钮 Tag 保存调色板 key，点击后统一处理。
+    /// </summary>
+    private void InitializeAccentSwatches()
+    {
+        if (AccentSwatchItems is null)
+        {
+            return;
+        }
+
+        AccentSwatchItems.Items.Clear();
+
+        foreach (var option in AccentPalette.All)
+        {
+            // NOTE: 每个按钮内部放一个圆角色块；选中态通过按钮边框颜色/粗细表达，可被键盘聚焦与点击。
+            var swatch = new Button
+            {
+                Tag = option.Key,
+                Width = 34,
+                Height = 34,
+                MinWidth = 34,
+                Padding = new Thickness(3),
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderBrush = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(1),
+                Content = new Border
+                {
+                    Width = 20,
+                    Height = 20,
+                    CornerRadius = new CornerRadius(10),
+                    Background = new SolidColorBrush(AccentThemeService.ColorFromHex(option.Accent)),
+                },
+            };
+
+            swatch.Click += OnAccentSwatchClick;
+            var displayName = GetAccentDisplayName(option);
+            ToolTipService.SetToolTip(swatch, displayName);
+            AutomationProperties.SetName(swatch, displayName);
+            AccentSwatchItems.Items.Add(swatch);
+        }
+
+        UpdateAccentSwatchSelection();
+    }
+
+    /// <summary>
+    /// 强调色色块点击：即时应用主题色，并持久化到 settings.AccentColor。
+    /// </summary>
+    private async void OnAccentSwatchClick(object sender, RoutedEventArgs e)
+    {
+        if (isSettingsInitializing || sender is not Button button)
+        {
+            return;
+        }
+
+        var accentKey = button.Tag?.ToString();
+        var option = AccentPalette.Resolve(accentKey);
+        selectedAccentKey = option.Key;
+
+        // 先即时换色，让用户点击后马上看到反馈；随后异步写 settings.json。
+        AccentThemeService.Apply(option.Key);
+        UpdateAccentSwatchSelection();
+        await SaveSettingsAsync(settings => settings with { AccentColor = option.Key });
+    }
+
+    /// <summary>
+    /// 根据当前语言返回强调色显示名，用于色块 ToolTip 与无障碍名称。
+    /// </summary>
+    private static string GetAccentDisplayName(AccentColorOption option)
+    {
+        var language = DevSwitch.App.Localization.LocalizationManager.Instance.CurrentLanguage;
+        return language == DevSwitch.Core.Localization.AppLanguage.English
+            ? option.DisplayNameEn
+            : option.DisplayNameZh;
+    }
+
+    /// <summary>
+    /// 刷新色块选中态：当前色为强调色边框，其余为透明边框。
+    /// 语言切换时也会调用，顺带刷新 ToolTip 显示名。
+    /// </summary>
+    private void UpdateAccentSwatchSelection()
+    {
+        if (AccentSwatchItems is null)
+        {
+            return;
+        }
+
+        foreach (var item in AccentSwatchItems.Items)
+        {
+            if (item is not Button button)
+            {
+                continue;
+            }
+
+            var option = AccentPalette.Resolve(button.Tag?.ToString());
+            bool selected = string.Equals(option.Key, selectedAccentKey, StringComparison.OrdinalIgnoreCase);
+            button.BorderBrush = selected
+                ? new SolidColorBrush(AccentThemeService.ColorFromHex(option.Accent))
+                : new SolidColorBrush(Colors.Transparent);
+            button.BorderThickness = selected ? new Thickness(2) : new Thickness(1);
+            var displayName = GetAccentDisplayName(option);
+            ToolTipService.SetToolTip(button, displayName);
+            AutomationProperties.SetName(button, displayName);
+        }
+    }
+
+    /// <summary>
     /// 启动后加载设置，把语言与下载并发数初值同步到设置页控件。
     /// </summary>
     private async Task LoadSettingsIntoUiAsync()
@@ -1079,6 +1191,11 @@ public sealed partial class MainWindow
             SelectComboBoxByTag(LanguageComboBox, settings.Language);
             DevSwitch.App.Localization.LocalizationManager.Instance.ApplyFromSettings(settings.Language);
             UpdateLanguageStatus();
+
+            // 强调色：启动时 App.xaml.cs 已先应用一次，这里只同步设置页选中态；容错解析未知值。
+            selectedAccentKey = AccentPalette.Resolve(settings.AccentColor).Key;
+            AccentThemeService.Apply(selectedAccentKey);
+            UpdateAccentSwatchSelection();
 
             // 下载并发数：按 Tag 匹配，缺省 4。
             SelectComboBoxByTag(DownloadParallelismComboBox, settings.Download.Parallelism.ToString());

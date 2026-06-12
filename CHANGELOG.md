@@ -5,6 +5,24 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.9] - 2026-06-12 — 强调色自定义 + 诊断误报修复
+
+### 新增（Added）
+- **全局强调色自定义**：设置页新增「强调色」区，提供 6 套 Fluent 2 风格配色
+  （海蓝 / 紫罗兰 / 翡翠 / 琥珀 / 玫瑰 / 青空）。点击色块即时换色并持久化到
+  `settings.json` 的 `accentColor`，影响按钮、链接、选中态与高亮数字等全局品牌色。
+  - 启动时优先读取并应用已保存的强调色，确保首帧即为目标配色；解析失败回退默认海蓝（`#2563EB`，与历史视觉一致）。
+  - 换色采用「就地改 Brush.Color」方案：所有引用强调色资源的已渲染控件即时重绘，无需重启。
+  - 色块带中英双语 ToolTip 与无障碍名称，随界面语言热切换。
+  - 调色板（`AccentPalette`）为纯数据 + 纯逻辑，独立于 WinUI，便于单元测试覆盖。
+
+### 修复（Fixed）
+- **环境诊断「DevSwitch PATH 片段」误报为错误**：使用老式逐类型 PATH（`current\java\bin` 等、
+  无统一 shims 目录）的用户，诊断恒报「未检测到任何托管片段」Error。
+  - 识别口径与 `CheckPathConflictsAsync` 对齐：存在唯一 shims 目录 → Pass；
+    仅有老式逐类型片段 → Info（建议迁移到 shims 单目录方案）；两者皆无才报 Error。
+  - `NormalizePath` 增强：统一正/反斜杠并去引号空白，便携模式（dataRoot 非 LocalAppData）下也能正确按 dataRoot 前缀识别托管条目。
+
 ## [v0.2.8] - 2026-06-11 — 紧急修复 v0.2.7 启动崩溃
 
 ### 修复（Fixed）

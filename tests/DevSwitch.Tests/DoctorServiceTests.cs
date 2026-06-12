@@ -126,6 +126,86 @@ public sealed class DoctorServiceTests
     }
 
     [Fact]
+    public async Task ManagedPathCheckPassesWhenShimsDirectoryPresent()
+    {
+        // 场景 a：现代 shim 单目录方案——PATH 含唯一 dataRoot\shims 即视为通过。
+        var dataRoot = CreateWritableDataRoot();
+        var env = HealthyEnvironment(dataRoot);
+        env.PathEntries =
+        [
+            Path.Combine(dataRoot, "shims"),
+        ];
+
+        var service = CreateService(dataRoot, env);
+
+        var report = await service.RunAsync();
+        var result = Single(report, "managed-path-segments");
+
+        Assert.Equal(DiagnosticSeverity.Pass, result.Severity);
+    }
+
+    [Fact]
+    public async Task ManagedPathCheckDoesNotErrorWhenLegacyPerTypeEntriesPresent()
+    {
+        // 场景 b：老式逐类型片段（current\<type>\bin，无 shims 目录）——不应判定为 Error。
+        var dataRoot = CreateWritableDataRoot();
+        var env = HealthyEnvironment(dataRoot);
+        env.PathEntries =
+        [
+            Path.Combine(dataRoot, "current", "java", "bin"),
+            Path.Combine(dataRoot, "current", "maven", "bin"),
+            Path.Combine(dataRoot, "current", "node"),
+        ];
+
+        var service = CreateService(dataRoot, env);
+
+        var report = await service.RunAsync();
+        var result = Single(report, "managed-path-segments");
+
+        Assert.NotEqual(DiagnosticSeverity.Error, result.Severity);
+    }
+
+    [Fact]
+    public async Task ManagedPathCheckReportsErrorWhenNoDevSwitchEntryPresent()
+    {
+        // 场景 c：PATH 完全不含任何 DevSwitch 目录——保持真·缺失的 Error。
+        var dataRoot = CreateWritableDataRoot();
+        var env = HealthyEnvironment(dataRoot);
+        env.PathEntries =
+        [
+            @"C:\Windows\System32",
+            @"C:\Program Files\Git\cmd",
+        ];
+
+        var service = CreateService(dataRoot, env);
+
+        var report = await service.RunAsync();
+        var result = Single(report, "managed-path-segments");
+
+        Assert.Equal(DiagnosticSeverity.Error, result.Severity);
+    }
+
+    [Fact]
+    public async Task ManagedPathCheckIgnoresCaseAndTrailingSeparatorDifferences()
+    {
+        // 场景 d：大小写 / 结尾反斜杠 / 正斜杠差异不应影响识别。
+        var dataRoot = CreateWritableDataRoot();
+        var env = HealthyEnvironment(dataRoot);
+        var shims = Path.Combine(dataRoot, "shims");
+        env.PathEntries =
+        [
+            shims.ToUpperInvariant() + "\\",
+        ];
+
+        var service = CreateService(dataRoot, env);
+
+        var report = await service.RunAsync();
+        var result = Single(report, "managed-path-segments");
+
+        Assert.Equal(DiagnosticSeverity.Pass, result.Severity);
+    }
+
+    [Fact]
     public async Task CurrentLinkCheckReportsErrorWhenLinkBroken()
     {
         var dataRoot = CreateWritableDataRoot();

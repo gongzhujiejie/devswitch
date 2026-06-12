@@ -79,6 +79,56 @@ public sealed class DevSwitchSettingsStoreTests
         Assert.True(File.Exists(settingsFile));
     }
 
+    [Fact]
+    public async Task LoadOrCreateAsyncDefaultsAccentColorToAzure()
+    {
+        // NOTE: 默认强调色应为 azure，确保未配置时与历史视觉一致。
+        var dataRoot = CreateTemporaryDirectory();
+
+        var settings = await DevSwitchSettingsStore.LoadOrCreateAsync(dataRoot);
+
+        Assert.Equal(AccentPalette.DefaultKey, settings.AccentColor);
+        Assert.Equal("azure", settings.AccentColor);
+    }
+
+    [Fact]
+    public async Task SaveAsyncThenLoadAsyncRoundTripsAccentColor()
+    {
+        // NOTE: 用户在设置页选定的强调色必须能持久化并读回。
+        var dataRoot = CreateTemporaryDirectory();
+        var defaults = DevSwitchSettingsStore.CreateDefault(dataRoot);
+        var settings = defaults with { AccentColor = "violet" };
+
+        await DevSwitchSettingsStore.SaveAsync(dataRoot, settings);
+        var loaded = await DevSwitchSettingsStore.LoadAsync(dataRoot);
+
+        Assert.Equal("violet", loaded.AccentColor);
+    }
+
+    [Fact]
+    public async Task LoadAsyncFallsBackWhenAccentColorFieldMissingFromLegacyJson()
+    {
+        // NOTE: 旧 settings.json 没有 accentColor 字段，System.Text.Json 会注入 null。
+        //       Load 不能崩，且经 AccentPalette.Resolve 容错后应回退默认 azure。
+        var dataRoot = CreateTemporaryDirectory();
+        var configDirectory = Path.Combine(dataRoot, "config");
+        Directory.CreateDirectory(configDirectory);
+        var settingsFile = Path.Combine(configDirectory, "settings.json");
+
+        // 故意写入不含 accentColor 的最小合法 JSON（含必需的 schemaVersion）。
+        var legacyJson = "{\"schemaVersion\":1,\"dataRoot\":\"" + dataRoot.Replace("\\", "\\\\") + "\","
+            + "\"language\":\"auto\","
+            + "\"download\":{\"parallelism\":4,\"keepArchives\":false,\"preferredMirror\":null},"
+            + "\"compatibility\":{\"setJdkHome\":false,\"setM2Home\":false},"
+            + "\"update\":{\"source\":\"github-releases\",\"fallbackSource\":null,\"repository\":null}}";
+        await File.WriteAllTextAsync(settingsFile, legacyJson);
+
+        var loaded = await DevSwitchSettingsStore.LoadAsync(dataRoot);
+
+        // 缺失字段反序列化为 null；Resolve 容错回退默认 azure。
+        Assert.Equal("azure", AccentPalette.Resolve(loaded.AccentColor).Key);
+    }
+
     private static string CreateTemporaryDirectory()
     {
         var path = Path.Combine(Path.GetTempPath(), "DevSwitch.Tests", Guid.NewGuid().ToString("N"));

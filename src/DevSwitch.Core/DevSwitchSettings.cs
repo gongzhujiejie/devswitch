@@ -16,13 +16,20 @@ namespace DevSwitch.Core;
 /// <param name="Download">下载器相关设置，例如并发数和是否保留安装包。</param>
 /// <param name="Compatibility">兼容变量设置，例如是否额外写入 JDK_HOME / M2_HOME。</param>
 /// <param name="Update">更新源设置；首版只在手动检查更新时使用。</param>
+/// <param name="AccentColor">
+/// 全局强调色调色板 key（如 azure/violet/emerald/amber/rose/sky）。
+/// 放在末尾并给默认值 <see cref="AccentPalette.DefaultKey"/>，既不破坏现有定位构造调用，
+/// 又能让反序列化旧 settings.json（无此字段，System.Text.Json 注入 null）时由
+/// <see cref="AccentPalette.Resolve"/> 容错回退默认色，不会崩溃。
+/// </param>
 public sealed record DevSwitchSettings(
     int SchemaVersion,
     string DataRoot,
     string Language,
     DownloadSettings Download,
     CompatibilitySettings Compatibility,
-    UpdateSettings Update);
+    UpdateSettings Update,
+    string AccentColor = AccentPalette.DefaultKey);
 
 /// <summary>
 /// 下载器设置。
@@ -81,7 +88,9 @@ public static class DevSwitchSettingsStore
             Language: "auto",
             Download: new DownloadSettings(Parallelism: 4, KeepArchives: false, PreferredMirror: null),
             Compatibility: new CompatibilitySettings(SetJdkHome: false, SetM2Home: false),
-            Update: new UpdateSettings(Source: "github-releases", FallbackSource: null, Repository: "gongzhujiejie/devswitch"));
+            Update: new UpdateSettings(Source: "github-releases", FallbackSource: null, Repository: "gongzhujiejie/devswitch"),
+            // NOTE: 默认强调色为 azure（#2563EB），与历史 App.xaml 硬编码一致，老用户视觉不变。
+            AccentColor: AccentPalette.DefaultKey);
     }
 
     /// <summary>

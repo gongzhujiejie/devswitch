@@ -260,33 +260,46 @@ public sealed class DoctorService
         const string id = "managed-path-segments";
         const string title = "DevSwitch PATH 片段";
 
+        // NOTE: 识别口径需与 CheckPathConflictsAsync 一致——只要 PATH 里存在任何 DevSwitch 托管目录
+        //       （现代 shim 单目录，或老式 current\<type>\bin 逐类型条目）就视为已托管，不应一律报错。
+        //       历史 bug：本检查只精确匹配唯一 shims 片段，老式逐类型 PATH（current\java\bin 等）
+        //       因没有 shims 目录而被判定“未检测到任何托管片段”，恒为 Error。
         var pathEntries = environmentReader.GetPathEntries();
         var normalized = pathEntries
             .Where(entry => !string.IsNullOrWhiteSpace(entry))
             .Select(NormalizePath)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-        var missing = expectations.ManagedPathSegments
+        // 现代方案的期望片段（唯一 shims 目录），全部存在视为最健康状态。
+        var missingShims = expectations.ManagedPathSegments
             .Where(segment => !normalized.Contains(NormalizePath(segment)))
             .ToArray();
 
-        if (missing.Length == expectations.ManagedPathSegments.Count)
+        if (missingShims.Length == 0)
         {
-            return Task.FromResult(new DiagnosticResult(
-                id, title, DiagnosticSeverity.Error,
-                "PATH 中未检测到任何 DevSwitch 托管片段。",
-                "请通过 DevSwitch 初始化环境写入托管 PATH 片段，并重启终端。"));
+            return Task.FromResult(DiagnosticResult.Pass(id, title, "PATH 已包含 DevSwitch 托管 shims 目录。"));
         }
 
-        if (missing.Length > 0)
+        // shims 缺失时，回退识别老式逐类型托管目录：任何位于当前 dataRoot 下的 PATH 条目即视为 DevSwitch 托管。
+        // 用 dataRoot 前缀判断，确保便携模式（dataRoot 非 LocalAppData）也能正确识别当前实际根目录下的条目。
+        var normalizedDataRoot = NormalizePath(dataRoot);
+        var hasLegacyManagedEntry = normalized.Any(entry =>
+            entry.Equals(normalizedDataRoot, StringComparison.OrdinalIgnoreCase)
+            || entry.StartsWith(normalizedDataRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+
+        if (hasLegacyManagedEntry)
         {
+            // 老式逐类型片段可用但缺少现代 shims 目录：属于可优化的信息项，而非错误。
             return Task.FromResult(new DiagnosticResult(
-                id, title, DiagnosticSeverity.Warning,
-                $"PATH 缺少 {missing.Length} 个 DevSwitch 托管片段。",
-                "请通过 DevSwitch 重新写入托管 PATH 片段。"));
+                id, title, DiagnosticSeverity.Info,
+                "PATH 含 DevSwitch 老式逐类型托管片段，但未检测到 shims 目录。",
+                "建议通过 DevSwitch 重新初始化环境，迁移到 shims 单目录方案以规避系统 PATH 长度上限。"));
         }
 
-        return Task.FromResult(DiagnosticResult.Pass(id, title, "PATH 已包含全部 DevSwitch 托管片段。"));
+        return Task.FromResult(new DiagnosticResult(
+            id, title, DiagnosticSeverity.Error,
+            "PATH 中未检测到任何 DevSwitch 托管片段。",
+            "请通过 DevSwitch 初始化环境写入托管 PATH 片段，并重启终端。"));
     }
 
     /// <summary>
@@ -526,10 +539,12 @@ public sealed class DoctorService
         => left >= right ? left : right;
 
     /// <summary>
-    /// 规整路径用于相等比较：去掉尾部分隔符。
+    /// 规整路径用于相等/前缀比较：去引号空白、把正斜杠统一为反斜杠、去掉尾部分隔符。
     /// </summary>
     private static string NormalizePath(string path)
-        => path.Trim().Trim('"').TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        => path.Trim().Trim('"')
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
 
     /// <summary>
     /// 尽力删除探针文件，忽略删除失败。

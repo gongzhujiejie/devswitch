@@ -64,6 +64,7 @@
                 Background="Transparent" />
 
             <TextBlock
+                x:Name="TitleBarDemoModeText"
                 Grid.Column="3"
                 Margin="12,0,0,0"
                 Foreground="{StaticResource DevSwitchMutedTextBrush}"
@@ -485,6 +486,7 @@
                 </Grid>
             </Border>
 
+
             <!-- 右侧内容：Home 使用 Gallery 式 Hero，SDK/Settings 为工具页。 -->
             <Grid Grid.Column="1" Background="{StaticResource DevSwitchCardBrush}">
                 <ScrollViewer x:Name="HomeContent" Visibility="Visible">
@@ -502,12 +504,12 @@
                                 <ColumnDefinition Width="420" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Margin="36,36,0,0" MaxWidth="560" Spacing="8">
-                                <TextBlock FontSize="16" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="Windows App SDK · 开发环境切换器" />
+                                <TextBlock x:Name="HomeHeroSubtitleText" FontSize="16" Foreground="{StaticResource DevSwitchSecondaryTextBrush}" Text="Windows App SDK · 开发环境切换器" />
                                 <TextBlock FontSize="38" FontWeight="SemiBold" Foreground="{StaticResource DevSwitchPrimaryTextBrush}" Text="DevSwitch" />
-                                <TextBlock FontSize="15" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="统一管理 JDK、Maven、Node.js、Go 等本地开发运行时。快速导入、检查路径，并安全切换环境。" TextWrapping="Wrap" />
+                                <TextBlock x:Name="HomeHeroDescriptionText" FontSize="15" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="统一管理 JDK、Maven、Node.js、Go 等本地开发运行时。快速导入、检查路径，并安全切换环境。" TextWrapping="Wrap" />
                                 <StackPanel Margin="0,18,0,0" Orientation="Horizontal" Spacing="10">
-                                    <Button Click="OnShowJavaSdkClick" Content="打开 SDK 管理" Style="{StaticResource AccentButtonStyle}" />
-                                    <Button Click="OnDoctorNavClick" Content="运行环境诊断" />
+                                    <Button x:Name="HomeOpenSdkButton" Click="OnShowJavaSdkClick" Content="打开 SDK 管理" Style="{StaticResource AccentButtonStyle}" />
+                                    <Button x:Name="HomeRunDoctorButton" Click="OnDoctorNavClick" Content="运行环境诊断" />
                                 </StackPanel>
                             </StackPanel>
 
@@ -541,7 +543,7 @@
                                                 <Border Height="10" Background="#E5E7EB" CornerRadius="3" />
                                                 <Border Height="10" Width="130" HorizontalAlignment="Left" Background="#E5E7EB" CornerRadius="3" />
                                                 <Border Width="86" Height="24" HorizontalAlignment="Left" Background="#EAF3FF" CornerRadius="12">
-                                                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="#0F6CBD" Text="使用中" />
+                                                    <TextBlock x:Name="HomeDecoActiveText" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold" Foreground="#0F6CBD" Text="使用中" />
                                                 </Border>
                                             </StackPanel>
                                         </Grid>
@@ -549,7 +551,7 @@
                                 </Border>
                                 <Border Width="178" Height="74" Margin="0,0,0,18" HorizontalAlignment="Left" VerticalAlignment="Bottom" Background="#FFFFFF" BorderBrush="#D7E3F6" BorderThickness="1" CornerRadius="10" Padding="14">
                                     <StackPanel Spacing="5">
-                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="当前运行时" />
+                                        <TextBlock x:Name="HomeDecoCurrentRuntimeLabel" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="当前运行时" />
                                         <TextBlock FontSize="18" FontWeight="SemiBold" Text="Temurin 17" />
                                     </StackPanel>
                                 </Border>
@@ -557,7 +559,7 @@
                         </Grid>
 
                         <StackPanel Spacing="12">
-                            <TextBlock FontSize="20" FontWeight="SemiBold" Text="快捷操作" />
+                            <TextBlock x:Name="HomeShortcutsHeaderText" FontSize="20" FontWeight="SemiBold" Text="快捷操作" />
                             <Grid ColumnSpacing="12">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -568,29 +570,29 @@
                                 <Button Grid.Column="0" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnShowJavaSdkClick">
                                     <StackPanel Spacing="4">
                                         <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE8B7;" />
-                                        <TextBlock FontWeight="SemiBold" Text="SDK 管理" />
-                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="导入并切换 SDK" />
+                                        <TextBlock x:Name="HomeShortcutSdkTitle" FontWeight="SemiBold" Text="SDK 管理" />
+                                        <TextBlock x:Name="HomeShortcutSdkDescText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="导入并切换 SDK" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="1" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnDoctorNavClick">
                                     <StackPanel Spacing="4">
                                         <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE90F;" />
-                                        <TextBlock FontWeight="SemiBold" Text="环境诊断" />
-                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="检查 PATH 与环境变量" />
+                                        <TextBlock x:Name="HomeShortcutDoctorTitle" FontWeight="SemiBold" Text="环境诊断" />
+                                        <TextBlock x:Name="HomeShortcutDoctorDescText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="检查 PATH 与环境变量" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="2" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnProfilesNavClick">
                                     <StackPanel Spacing="4">
                                         <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE77B;" />
-                                        <TextBlock FontWeight="SemiBold" Text="配置档案" />
-                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="保存项目环境预设" />
+                                        <TextBlock x:Name="HomeShortcutProfilesTitle" FontWeight="SemiBold" Text="配置档案" />
+                                        <TextBlock x:Name="HomeShortcutProfilesDescText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="保存项目环境预设" />
                                     </StackPanel>
                                 </Button>
                                 <Button Grid.Column="3" MinHeight="96" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Click="OnSettingsNavClick">
                                     <StackPanel Spacing="4">
                                         <FontIcon HorizontalAlignment="Left" FontFamily="Segoe MDL2 Assets" Glyph="&#xE713;" />
-                                        <TextBlock FontWeight="SemiBold" Text="设置" />
-                                        <TextBlock FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="语言、更新与反馈" />
+                                        <TextBlock x:Name="HomeShortcutSettingsTitle" FontWeight="SemiBold" Text="设置" />
+                                        <TextBlock x:Name="HomeShortcutSettingsDescText" FontSize="12" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="语言、更新与反馈" />
                                     </StackPanel>
                                 </Button>
                             </Grid>
@@ -602,8 +604,8 @@
                 <ScrollViewer x:Name="SdkOverviewContent" Visibility="Collapsed">
                     <StackPanel Padding="36,30,36,44" Spacing="22">
                         <StackPanel Spacing="4">
-                            <TextBlock FontSize="30" FontWeight="SemiBold" Text="SDK 管理" />
-                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="集中管理本机的 Java、Maven、Node.js、Go 运行时。点选下方分类卡片进入对应版本管理。" TextWrapping="Wrap" />
+                            <TextBlock x:Name="SdkOverviewTitleText" FontSize="30" FontWeight="SemiBold" Text="SDK 管理" />
+                            <TextBlock x:Name="SdkOverviewSubtitleText" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="集中管理本机的 Java、Maven、Node.js、Go 运行时。点选下方分类卡片进入对应版本管理。" TextWrapping="Wrap" />
                         </StackPanel>
 
                         <!-- 四类 SDK 卡片入口：自适应换行，悬停有阴影，整卡可点。 -->
@@ -683,7 +685,7 @@
                         </Grid.ColumnDefinitions>
                         <StackPanel Spacing="4">
                             <TextBlock FontSize="30" FontWeight="SemiBold" Text="{Binding SelectedCategory}" />
-                            <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="管理当前 SDK 类型的本地版本、来源路径和切换状态。" />
+                            <TextBlock x:Name="SdkPageSubtitleText" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="管理当前 SDK 类型的本地版本、来源路径和切换状态。" />
                         </StackPanel>
                         <Border
                             Grid.Column="1"
@@ -717,31 +719,31 @@
                                 <Button x:Name="AddLocalSdkButton" Click="OnAddLocalSdkClick" Style="{StaticResource AccentButtonStyle}">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE710;" />
-                                        <TextBlock Text="添加本地 SDK" />
+                                        <TextBlock x:Name="SdkAddLocalButtonText" Text="添加本地 SDK" />
                                     </StackPanel>
                                 </Button>
                                 <Button x:Name="DownloadSdkButton" Click="OnDownloadSdkClick">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE896;" />
-                                        <TextBlock Text="下载" />
+                                        <TextBlock x:Name="SdkDownloadButtonText" Text="下载" />
                                     </StackPanel>
                                 </Button>
-                                <Button Click="OnRefreshSdkCatalogClick">
+                                <Button x:Name="RefreshSdkCatalogButton" Click="OnRefreshSdkCatalogClick">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE72C;" />
-                                        <TextBlock Text="刷新" />
+                                        <TextBlock x:Name="SdkRefreshButtonText" Text="刷新" />
                                     </StackPanel>
                                 </Button>
-                                <Button Click="OnDetectCurrentClick">
+                                <Button x:Name="DetectCurrentSdkButton" Click="OnDetectCurrentClick">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE721;" />
-                                        <TextBlock Text="检测当前" />
+                                        <TextBlock x:Name="SdkDetectButtonText" Text="检测当前" />
                                     </StackPanel>
                                 </Button>
                                 <Button x:Name="ResetEnvironmentButton" Click="OnResetEnvironmentClick">
                                     <StackPanel Orientation="Horizontal" Spacing="6">
                                         <FontIcon FontFamily="Segoe MDL2 Assets" FontSize="14" Glyph="&#xE777;" />
-                                        <TextBlock Text="重置" />
+                                        <TextBlock x:Name="SdkResetButtonText" Text="重置" />
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -752,10 +754,10 @@
                                 MinWidth="148"
                                 PlaceholderText="状态"
                                 SelectionChanged="OnStatusFilterChanged">
-                                <ComboBoxItem Content="全部" IsSelected="True" />
-                                <ComboBoxItem Content="使用中" />
-                                <ComboBoxItem Content="可用" />
-                                <ComboBoxItem Content="不可用" />
+                                <ComboBoxItem x:Name="StatusFilterAllItem" Content="全部" IsSelected="True" />
+                                <ComboBoxItem x:Name="StatusFilterActiveItem" Content="使用中" />
+                                <ComboBoxItem x:Name="StatusFilterUsableItem" Content="可用" />
+                                <ComboBoxItem x:Name="StatusFilterUnavailableItem" Content="不可用" />
                             </ComboBox>
                         </Grid>
                     </Border>
@@ -874,15 +876,6 @@
                             <TextBlock Foreground="{StaticResource DevSwitchMutedTextBrush}" HorizontalAlignment="Center" MaxWidth="360" Text="{Binding EmptyStateText}" TextAlignment="Center" TextWrapping="Wrap" />
                             <Button x:Name="EmptyAddLocalSdkButton" Click="OnAddLocalSdkClick" Content="添加本地 SDK" />
                         </StackPanel>
-                        <!-- 路径复制反馈：3 秒自动消失的 InfoBar，浮在表格顶部，不阻挡列表交互。 -->
-                        <InfoBar
-                            x:Name="PathCopiedInfoBar"
-                            Margin="36,0,36,0"
-                            HorizontalAlignment="Stretch"
-                            IsClosable="False"
-                            IsOpen="False"
-                            Severity="Success"
-                            VerticalAlignment="Top" />
                     </Grid>
                 </Grid>
 
@@ -911,6 +904,31 @@
                                         <ComboBoxItem Content="简体中文" Tag="zh-CN" />
                                         <ComboBoxItem Content="English" Tag="en-US" />
                                     </ComboBox>
+                                </Grid>
+                            </Border>
+                        </StackPanel>
+
+                        <!-- ============ 强调色 ============ -->
+                        <!-- 6 个 Fluent2 风格色块按钮，点击即时变色并持久化到 settings.AccentColor。 -->
+                        <StackPanel Spacing="12">
+                            <TextBlock x:Name="SettingsAccentHeaderText" FontSize="20" FontWeight="SemiBold" Text="强调色" />
+                            <Border BorderBrush="{StaticResource DevSwitchBorderBrush}" BorderThickness="1" CornerRadius="6" Padding="18">
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Spacing="2">
+                                        <TextBlock x:Name="SettingsAccentLabelText" FontWeight="SemiBold" Text="强调色" />
+                                        <TextBlock x:Name="SettingsAccentDescText" FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="影响按钮、链接、选中态和高亮数字。" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                    <ItemsControl x:Name="AccentSwatchItems" Grid.Column="1" VerticalAlignment="Center">
+                                        <ItemsControl.ItemsPanel>
+                                            <ItemsPanelTemplate>
+                                                <StackPanel Orientation="Horizontal" Spacing="8" />
+                                            </ItemsPanelTemplate>
+                                        </ItemsControl.ItemsPanel>
+                                    </ItemsControl>
                                 </Grid>
                             </Border>
                         </StackPanel>
@@ -1168,5 +1186,20 @@
                 </StackPanel>
             </Border>
         </Grid>
+
+        <!-- ============ 路径复制反馈浮层 ============ -->
+        <!-- 顶层居中浮在窗口最上方（跨标题栏 + 内容两行），紧凑、自动 3 秒消失、不占据列宽、不阻挡交互。 -->
+        <InfoBar
+            x:Name="PathCopiedInfoBar"
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            MaxWidth="320"
+            Margin="0,12,0,0"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Top"
+            IsClosable="False"
+            IsHitTestVisible="False"
+            IsOpen="False"
+            Severity="Success" />
     </Grid>
 </Window>

@@ -85,6 +85,7 @@ public sealed partial class MainWindow : Window
 
         InitializeNavigationCaches();
         InitializeNavigationVisuals();
+        InitializeAccentSwatches();
         // 绑定 SDK 总览卡片数据源。
         SdkOverviewCards.ItemsSource = sdkOverviewSummaries;
         ToolTipService.SetToolTip(TitlePaneToggleButton, "折叠导航");
@@ -124,6 +125,12 @@ public sealed partial class MainWindow : Window
     {
         var loc = DevSwitch.App.Localization.LocalizationManager.Instance;
 
+        // 标题栏右侧"演示模式"标签。
+        if (TitleBarDemoModeText is not null)
+        {
+            TitleBarDemoModeText.Text = loc["titlebar.demoMode"];
+        }
+
         // 导航栏文本。
         NavMainHeaderText.Text = loc["nav.section"];
         HomeNavText.Text = loc["nav.home"];
@@ -133,19 +140,79 @@ public sealed partial class MainWindow : Window
         LogsNavText.Text = loc["nav.logs"];
         SettingsNavText.Text = loc["nav.settings"];
 
-        // 设置页标题与副标题、语言分区。
+        // 首页 hero：副标题/描述/两个 CTA + 装饰卡的"使用中""当前运行时" + 快捷操作分区。
+        if (HomeHeroSubtitleText is not null)
+        {
+            HomeHeroSubtitleText.Text = loc["home.subtitle"];
+            HomeHeroDescriptionText.Text = loc["home.description"];
+            HomeOpenSdkButton.Content = loc["home.openSdk"];
+            HomeRunDoctorButton.Content = loc["home.runDoctor"];
+            HomeDecoActiveText.Text = loc["home.deco.active"];
+            HomeDecoCurrentRuntimeLabel.Text = loc["home.deco.currentRuntime"];
+            HomeShortcutsHeaderText.Text = loc["home.shortcuts"];
+
+            // 四张快捷卡：title 复用现有导航文案，描述用专属 key。
+            HomeShortcutSdkTitle.Text = loc["nav.sdk"];
+            HomeShortcutSdkDescText.Text = loc["home.shortcut.sdk.desc"];
+            HomeShortcutDoctorTitle.Text = loc["nav.doctor"];
+            HomeShortcutDoctorDescText.Text = loc["home.shortcut.doctor.desc"];
+            HomeShortcutProfilesTitle.Text = loc["nav.profiles"];
+            HomeShortcutProfilesDescText.Text = loc["home.shortcut.profiles.desc"];
+            HomeShortcutSettingsTitle.Text = loc["nav.settings"];
+            HomeShortcutSettingsDescText.Text = loc["home.shortcut.settings.desc"];
+        }
+
+        // SDK 总览页（点击"SDK 管理"父项进入）：标题与副标题。
+        if (SdkOverviewTitleText is not null)
+        {
+            SdkOverviewTitleText.Text = loc["nav.sdk"];
+            SdkOverviewSubtitleText.Text = loc["sdk.overview.subtitle"];
+        }
+
+        // SDK 分类页（Java/Maven/Node.js/Go 共用一套）：副标题、5 个工具栏按钮、状态过滤项。
+        if (SdkPageSubtitleText is not null)
+        {
+            SdkPageSubtitleText.Text = loc["sdk.page.subtitle"];
+            SdkAddLocalButtonText.Text = loc["sdk.button.addLocal"];
+            SdkDownloadButtonText.Text = loc["sdk.button.download"];
+            SdkRefreshButtonText.Text = loc["common.refresh"];
+            SdkDetectButtonText.Text = loc["sdk.button.detect"];
+            SdkResetButtonText.Text = loc["sdk.button.reset"];
+
+            // 状态过滤 ComboBox 选项与占位符。
+            if (StatusFilterComboBox is not null)
+            {
+                StatusFilterComboBox.PlaceholderText = loc["sdk.statusFilter.placeholder"];
+            }
+            StatusFilterAllItem.Content = loc["sdk.statusFilter.all"];
+            StatusFilterActiveItem.Content = loc["sdk.statusFilter.active"];
+            StatusFilterUsableItem.Content = loc["sdk.statusFilter.usable"];
+            StatusFilterUnavailableItem.Content = loc["sdk.statusFilter.unavailable"];
+
+            // 空状态：标题 + 行动按钮。
+            if (EmptyAddLocalSdkButton is not null)
+            {
+                EmptyAddLocalSdkButton.Content = loc["sdk.button.addLocal"];
+            }
+        }
+
+        // SDK 表格列头（"路径"列已存在，这里补齐其它列头与"操作"列）。
+        if (SdkPathColumnHeaderText is not null)
+        {
+            SdkPathColumnHeaderText.Text = loc["sdk.column.path"];
+        }
+
+        // 设置页：标题/副标题与各分区 header（语言、数据目录、下载、更新、反馈）。
         if (SettingsTitleText is not null)
         {
             SettingsTitleText.Text = loc["settings.title"];
             SettingsSubtitleText.Text = loc["settings.subtitle"];
             SettingsLanguageHeaderText.Text = loc["settings.language"];
             SettingsLanguageDescText.Text = loc["settings.language.desc"];
-        }
-
-        // SDK 表格「路径」列头。
-        if (SdkPathColumnHeaderText is not null)
-        {
-            SdkPathColumnHeaderText.Text = loc["sdk.column.path"];
+            SettingsAccentHeaderText.Text = loc["settings.accent"];
+            SettingsAccentLabelText.Text = loc["settings.accent"];
+            SettingsAccentDescText.Text = loc["settings.accent.desc"];
+            UpdateAccentSwatchSelection();
         }
 
         // 语言状态行（当前语言：xxx）。
