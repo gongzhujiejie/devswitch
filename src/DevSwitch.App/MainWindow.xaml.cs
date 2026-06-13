@@ -478,29 +478,41 @@ public sealed partial class MainWindow : Window
 
     private void OnProfilesNavClick(object sender, RoutedEventArgs e)
     {
-        SetNavigationSelection(ProfilesNavButton, ProfilesIndicator);
-        ShowProfilesContent();
+        RunNavigationAction("配置档案", () =>
+        {
+            SetNavigationSelection(ProfilesNavButton, ProfilesIndicator);
+            ShowProfilesContent();
+        });
     }
 
     private async void OnDoctorNavClick(object sender, RoutedEventArgs e)
     {
-        SetNavigationSelection(DoctorNavButton, DoctorIndicator);
-        ShowDoctorContent();
+        await RunNavigationActionAsync("环境诊断", async () =>
+        {
+            SetNavigationSelection(DoctorNavButton, DoctorIndicator);
+            ShowDoctorContent();
 
-        // 进入诊断页自动运行一次诊断；已有结果时仍刷新以反映最新状态。
-        await RunDoctorAsync();
+            // 进入诊断页自动运行一次诊断；已有结果时仍刷新以反映最新状态。
+            await RunDoctorAsync();
+        });
     }
 
     private void OnLogsNavClick(object sender, RoutedEventArgs e)
     {
-        SetNavigationSelection(LogsNavButton, LogsIndicator);
-        ShowLogsContent();
+        RunNavigationAction("日志", () =>
+        {
+            SetNavigationSelection(LogsNavButton, LogsIndicator);
+            ShowLogsContent();
+        });
     }
 
     private void OnSettingsNavClick(object sender, RoutedEventArgs e)
     {
-        SetNavigationSelection(SettingsNavButton, SettingsIndicator);
-        ShowSettingsContent();
+        RunNavigationAction("设置", () =>
+        {
+            SetNavigationSelection(SettingsNavButton, SettingsIndicator);
+            ShowSettingsContent();
+        });
     }
 
     /// <summary>
@@ -688,6 +700,50 @@ public sealed partial class MainWindow : Window
         };
 
         await dialog.ShowAsync();
+    }
+
+    /// <summary>
+    /// 执行同步导航动作并统一吞吐异常，避免 WinUI click handler 中的页面加载异常冒泡造成进程退出。
+    /// </summary>
+    /// <param name="targetName">用户可读的导航目标名称。</param>
+    /// <param name="action">具体导航动作。</param>
+    private void RunNavigationAction(string targetName, Action action)
+    {
+        _ = RunNavigationActionAsync(targetName, () =>
+        {
+            action();
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>
+    /// 执行异步导航动作并统一错误恢复：回到首页并展示错误提示，不让异常进入 WinUI 全局未处理异常。
+    /// </summary>
+    /// <param name="targetName">用户可读的导航目标名称。</param>
+    /// <param name="action">具体导航动作。</param>
+    private async Task RunNavigationActionAsync(string targetName, Func<Task> action)
+    {
+        try
+        {
+            await action();
+        }
+        catch (OperationCanceledException)
+        {
+            // NOTE: 窗口关闭或导航取消无需提示。
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                SetNavigationSelection(HomeNavButton, HomeIndicator);
+                ShowHomeContent();
+                await ShowSimpleDialogAsync($"{targetName}打开失败", $"无法打开{targetName}：{ex.Message}");
+            }
+            catch
+            {
+                // NOTE: 错误恢复本身不能再次抛出，否则仍会落入 WinUI 全局未处理异常。
+            }
+        }
     }
 
     /// <summary>
@@ -919,10 +975,9 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowSettingsContent()
     {
-        var settingsContent = EnsureDeferredContent<ScrollViewer>(nameof(SettingsContent));
+        SetActiveContent(SettingsContent);
         InitializeAccentSwatches();
         _ = LoadSettingsIntoUiAsync();
-        SetActiveContent(settingsContent);
     }
 
     // 配置档案视图懒初始化标记：仅首次进入时注入 dataRoot 并加载，避免重复 IO。
@@ -933,12 +988,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void ShowProfilesContent()
     {
-        var profilesContent = EnsureDeferredContent<Views.ProfilesView>(nameof(ProfilesContent));
-        SetActiveContent(profilesContent);
+        SetActiveContent(ProfilesContent);
 
         if (!isProfilesInitialized)
         {
-            profilesContent.Initialize(dataRoot);
+            ProfilesContent.Initialize(dataRoot);
             isProfilesInitialized = true;
         }
     }
@@ -946,11 +1000,21 @@ public sealed partial class MainWindow : Window
     /// <summary>
     /// 显示日志页；每次进入都重新加载，保证看到最新记录。
     /// </summary>
+    private bool isLogsInitialized;
+
     private void ShowLogsContent()
     {
-        var logsContent = EnsureDeferredContent<Views.LogsView>(nameof(LogsContent));
-        logsContent.Initialize(dataRoot);
-        SetActiveContent(logsContent);
+        SetActiveContent(LogsContent);
+
+        if (!isLogsInitialized)
+        {
+            LogsContent.Initialize(dataRoot);
+            isLogsInitialized = true;
+        }
+        else
+        {
+            LogsContent.Refresh();
+        }
     }
 
     /// <summary>

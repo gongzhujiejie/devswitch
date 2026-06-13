@@ -828,6 +828,9 @@ internal static class HelperJson
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);
 
+    // NOTE: helper 是诊断/切换链路的外部进程边界，必须有硬超时，避免 stdout/stderr 不关闭时 UI 永久转圈。
+    private static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// 以「一次请求一进程」方式调用 helper 指定操作并解析响应。
     /// </summary>
@@ -843,17 +846,46 @@ internal static class HelperJson
             CreateNoWindow = true,
         };
 
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(DefaultTimeout);
+
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start DevSwitch helper.");
-        await process.StandardInput.WriteAsync(JsonSerializer.Serialize(request, SerializerOptions)).ConfigureAwait(false);
-        await process.StandardInput.FlushAsync().ConfigureAwait(false);
-        process.StandardInput.Close();
+        try
+        {
+            await process.StandardInput.WriteAsync(JsonSerializer.Serialize(request, SerializerOptions)).ConfigureAwait(false);
+            await process.StandardInput.FlushAsync().ConfigureAwait(false);
+            process.StandardInput.Close();
 
-        string output = await process.StandardOutput.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        string error = await process.StandardError.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
-        await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            string output = await process.StandardOutput.ReadToEndAsync(timeoutCts.Token).ConfigureAwait(false);
+            string error = await process.StandardError.ReadToEndAsync(timeoutCts.Token).ConfigureAwait(false);
+            await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
 
-        return JsonSerializer.Deserialize<HelperResponse>(output, SerializerOptions)
-            ?? throw new InvalidDataException($"Helper returned invalid JSON. stderr: {error}");
+            return JsonSerializer.Deserialize<HelperResponse>(output, SerializerOptions)
+                ?? throw new InvalidDataException($"Helper returned invalid JSON. stderr: {error}");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            TryKill(process);
+            throw new TimeoutException($"DevSwitch helper operation '{operation}' timed out after {DefaultTimeout.TotalSeconds:0}s.");
+        }
+    }
+
+    /// <summary>
+    /// 尝试终止超时 helper 进程树；终止失败不覆盖原始超时错误。
+    /// </summary>
+    private static void TryKill(Process process)
+    {
+        try
+        {
+            if (!process.HasExited)
+            {
+                process.Kill(entireProcessTree: true);
+            }
+        }
+        catch
+        {
+            // NOTE: 进程可能已经退出或权限不足；这里不能影响调用方拿到 timeout 诊断。
+        }
     }
 
     /// <summary>

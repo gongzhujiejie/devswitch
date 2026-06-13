@@ -1084,8 +1084,7 @@ public sealed partial class MainWindow
     /// </summary>
     private void ShowDoctorContent()
     {
-        var doctorContent = EnsureDeferredContent<Grid>(nameof(DoctorContent));
-        SetActiveContent(doctorContent);
+        SetActiveContent(DoctorContent);
     }
 
     /// <summary>
@@ -1106,31 +1105,51 @@ public sealed partial class MainWindow
             return;
         }
 
-        isDoctorRunning = true;
-        RunDoctorButton.IsEnabled = false;
-        DoctorProgressRing.IsActive = true;
-        DoctorProgressRing.Visibility = Visibility.Visible;
-        DoctorSummaryText.Text = "正在运行诊断检查……";
-
         try
         {
+            isDoctorRunning = true;
+            if (RunDoctorButton is not null)
+            {
+                RunDoctorButton.IsEnabled = false;
+            }
+
+            if (DoctorProgressRing is not null)
+            {
+                DoctorProgressRing.IsActive = true;
+                DoctorProgressRing.Visibility = Visibility.Visible;
+            }
+
+            if (DoctorSummaryText is not null)
+            {
+                DoctorSummaryText.Text = "正在运行诊断检查……";
+            }
+
             var service = appServices.CreateDoctorService();
             var report = await service.RunAsync(windowLifetime.Token);
 
             var rows = report.Results.Select(DoctorResultRow.FromResult).ToArray();
-            DoctorResultsControl.ItemsSource = rows;
+            if (DoctorResultsControl is not null)
+            {
+                DoctorResultsControl.ItemsSource = rows;
+            }
 
-            DoctorSummaryText.Text =
-                $"诊断完成：整体等级 {MapSeverityText(report.OverallSeverity)}，" +
-                $"通过 {report.CountOf(DiagnosticSeverity.Pass)} · " +
-                $"信息 {report.CountOf(DiagnosticSeverity.Info)} · " +
-                $"警告 {report.CountOf(DiagnosticSeverity.Warning)} · " +
-                $"错误 {report.CountOf(DiagnosticSeverity.Error)} · " +
-                $"致命 {report.CountOf(DiagnosticSeverity.Fatal)}。";
+            if (DoctorSummaryText is not null)
+            {
+                DoctorSummaryText.Text =
+                    $"诊断完成：整体等级 {MapSeverityText(report.OverallSeverity)}，" +
+                    $"通过 {report.CountOf(DiagnosticSeverity.Pass)} · " +
+                    $"信息 {report.CountOf(DiagnosticSeverity.Info)} · " +
+                    $"警告 {report.CountOf(DiagnosticSeverity.Warning)} · " +
+                    $"错误 {report.CountOf(DiagnosticSeverity.Error)} · " +
+                    $"致命 {report.CountOf(DiagnosticSeverity.Fatal)}。";
+            }
         }
         catch (HelperUnavailableException ex)
         {
-            DoctorSummaryText.Text = ex.Message;
+            if (DoctorSummaryText is not null)
+            {
+                DoctorSummaryText.Text = ex.Message;
+            }
         }
         catch (OperationCanceledException)
         {
@@ -1138,14 +1157,24 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            DoctorSummaryText.Text = $"诊断执行异常：{ex.Message}";
+            if (DoctorSummaryText is not null)
+            {
+                DoctorSummaryText.Text = $"诊断执行异常：{ex.Message}";
+            }
         }
         finally
         {
             isDoctorRunning = false;
-            RunDoctorButton.IsEnabled = true;
-            DoctorProgressRing.IsActive = false;
-            DoctorProgressRing.Visibility = Visibility.Collapsed;
+            if (RunDoctorButton is not null)
+            {
+                RunDoctorButton.IsEnabled = true;
+            }
+
+            if (DoctorProgressRing is not null)
+            {
+                DoctorProgressRing.IsActive = false;
+                DoctorProgressRing.Visibility = Visibility.Collapsed;
+            }
         }
     }
 
@@ -1262,13 +1291,13 @@ public sealed partial class MainWindow
     /// </summary>
     private async Task LoadSettingsIntoUiAsync()
     {
+        isSettingsInitializing = true;
+
         try
         {
             var settings = await DevSwitchSettingsStore.LoadOrCreateAsync(dataRoot);
 
-            isSettingsInitializing = true;
-
-            // 语言：启动阶段必须立即应用到 LocalizationManager；设置页控件可能因 x:Load=False 尚未创建。
+            // 语言：启动阶段必须立即应用到 LocalizationManager；设置页控件可能尚未进入可见状态。
             // ApplyFromSettings 若与当前语言不同会触发 LanguageChanged，自动刷新已加载界面文案。
             DevSwitch.App.Localization.LocalizationManager.Instance.ApplyFromSettings(settings.Language);
             if (LanguageComboBox is not null)
@@ -1322,7 +1351,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async void OnLanguageSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isSettingsInitializing || LanguageComboBox.SelectedItem is not ComboBoxItem item)
+        if (isSettingsInitializing || sender is not ComboBox comboBox || comboBox.SelectedItem is not ComboBoxItem item)
         {
             return;
         }
@@ -1344,7 +1373,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async void OnDownloadParallelismChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isSettingsInitializing || DownloadParallelismComboBox.SelectedItem is not ComboBoxItem item)
+        if (isSettingsInitializing || sender is not ComboBox comboBox || comboBox.SelectedItem is not ComboBoxItem item)
         {
             return;
         }
@@ -1809,6 +1838,11 @@ public sealed partial class MainWindow
     /// </summary>
     private void UpdateDataRootText()
     {
+        if (DataRootPathText is null || DataModeComboBox is null)
+        {
+            return;
+        }
+
         var config = DataRootBootstrap.ReadConfig(AppContext.BaseDirectory);
         string modeLabel = config.Mode switch
         {
@@ -1819,7 +1853,8 @@ public sealed partial class MainWindow
         };
         DataRootPathText.Text = $"当前数据目录：{dataRoot}（{modeLabel}）";
 
-        // 同步下拉框选中项，置 isSettingsInitializing 避免触发持久化。
+        // 同步下拉框选中项，置 isSettingsInitializing 避免触发持久化，并在嵌套初始化时恢复旧状态。
+        bool wasInitializing = isSettingsInitializing;
         isSettingsInitializing = true;
         string tag = config.Mode switch
         {
@@ -1829,7 +1864,7 @@ public sealed partial class MainWindow
             _ => "portable",
         };
         SelectComboBoxByTag(DataModeComboBox, tag);
-        isSettingsInitializing = false;
+        isSettingsInitializing = wasInitializing;
     }
 
     /// <summary>
@@ -1837,7 +1872,7 @@ public sealed partial class MainWindow
     /// </summary>
     private async void OnDataModeSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        if (isSettingsInitializing || DataModeComboBox.SelectedItem is not ComboBoxItem item)
+        if (isSettingsInitializing || sender is not ComboBox comboBox || comboBox.SelectedItem is not ComboBoxItem item)
         {
             return;
         }

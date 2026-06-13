@@ -5,6 +5,18 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.13] - 2026-06-13 — 一级导航页闪退修复
+
+### 修复（Fixed）
+- **配置档案 / 环境诊断 / 日志 / 设置首次点击卡死闪退**：根据 `startup.log` 中的 `InvalidOperationException: 无法加载界面区域` 证据，移除四个一级导航页的 `x:Load=\"False\"` 首访懒实例化，改为控件树随主窗口创建、业务 IO 仍在导航后异步执行。
+- **导航异常边界**：四个一级导航 click handler 统一走 `RunNavigationAction` / `RunNavigationActionAsync`，页面打开失败时回到首页并展示错误提示，不再让异常冒泡到 WinUI 全局未处理异常。
+- **日志页稳定性**：日志页改为先显示再刷新；新增 `Refresh()`、加载防重入、通道枚举异常兜底和 `ContentDialog.XamlRoot` 防御，避免重复点击日志页叠加任务或提示路径二次崩溃。
+- **设置页初始化时序**：移除 `LanguageComboBox` 的 XAML 默认 `SelectedIndex`，提前设置 `isSettingsInitializing`，并让设置页 `SelectionChanged` 处理器使用 `sender` 作为事件源，避免初始化期间误触发持久化/语言切换。
+- **诊断页卡死防御**：`RunDoctorAsync` 的 UI 状态切换纳入 try/finally 并加控件判空；helper JSON 调用增加 5 秒硬超时和进程树清理，避免 helper 卡住导致诊断页永久转圈。
+
+### 测试（Tests）
+- 新增一级导航回归测试，覆盖四个崩溃敏感页面不再 `x:Load` 延迟、Show 方法不再依赖 `EnsureDeferredContent/FindName`、click handler 必须走统一导航安全边界。
+
 ## [v0.2.12] - 2026-06-13 — 配置档案首访崩溃修复
 
 ### 修复（Fixed）

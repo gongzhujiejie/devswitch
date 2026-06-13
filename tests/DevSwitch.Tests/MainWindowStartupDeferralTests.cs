@@ -1,4 +1,4 @@
-// 文件用途：用源码级守护测试约束 WinUI 主窗口启动路径，防止非首屏重控件回退到启动期创建。
+// 文件用途：用源码级守护测试约束 WinUI 主窗口启动路径，防止非首屏业务 IO 回退到启动期执行。
 // 创建/修改日期：2026-06-13
 // 语言版本要求：C# 12 / .NET 8+
 // 依赖库：xUnit、System.Text.RegularExpressions
@@ -16,15 +16,17 @@ public sealed class MainWindowStartupDeferralTests
     [InlineData("DoctorContent")]
     [InlineData("ProfilesContent")]
     [InlineData("LogsContent")]
-    public void NonHomeHeavyContentUsesXLoadFalse(string elementName)
+    public void NonHomeCrashSensitiveContentIsPreCreatedButCollapsed(string elementName)
     {
-        // 首屏只需要 HomeContent；其它页面若仅 Visibility=Collapsed，WinUI 仍会在 InitializeComponent 创建控件树。
-        // x:Load=False 才能把设置页、诊断页、独立 UserControl 等成本推迟到首次导航时。
+        // 这四个一级导航页可被用户直接点击。v0.2.11/v0.2.12 证明 x:Load=False + FindName 首访加载会在
+        // 部分环境下返回 null 并触发 WinUI 未处理异常；因此控件树预创建，重 IO 仍放在 Loaded/导航后异步执行。
         string xaml = ReadRepoFile("src", "DevSwitch.App", "MainWindow.xaml");
 
-        string pattern = $"<[^>]+x:Name=\\\"{Regex.Escape(elementName)}\\\"[^>]+x:Load=\\\"False\\\"";
+        string pattern = $"<[^>]+x:Name=\\\"{Regex.Escape(elementName)}\\\"[^>]+Visibility=\\\"Collapsed\\\"";
+        string element = Regex.Match(xaml, pattern, RegexOptions.Singleline).Value;
 
-        Assert.Matches(pattern, xaml);
+        Assert.False(string.IsNullOrWhiteSpace(element), $"{elementName} should remain present and collapsed in MainWindow.xaml.");
+        Assert.DoesNotContain("x:Load=\"False\"", element);
     }
 
     [Fact]

@@ -49,6 +49,9 @@ public sealed partial class LogsView : UserControl
     // 防止初始化期间填充下拉触发的 SelectionChanged 反向再次加载。
     private bool isPopulatingChannels;
 
+    // 防止快速重复进入日志页或连续点击刷新时叠加多个后台读取任务。
+    private bool isLoading;
+
     /// <summary>
     /// 构造视图：加载 XAML 并绑定列表数据源。
     /// </summary>
@@ -70,11 +73,16 @@ public sealed partial class LogsView : UserControl
     public void Initialize(string dataRoot)
     {
         this.dataRoot = dataRoot;
+        Refresh();
+    }
 
-        // 填充通道下拉（含「全部」），再触发首次加载。
+    /// <summary>
+    /// 重新枚举日志通道并异步读取最近日志；可由主窗口重复进入日志页时安全调用。
+    /// </summary>
+    public void Refresh()
+    {
+        // 填充通道下拉（含「全部」），再触发加载；内部有防重入，避免快速连点叠加任务。
         this.PopulateChannels();
-
-        // 首次加载放到后台，不阻塞调用线程（主窗口切页时）。
         _ = this.LoadLogsAsync();
     }
 
@@ -95,13 +103,19 @@ public sealed partial class LogsView : UserControl
             this.ChannelComboBox.Items.Clear();
             this.ChannelComboBox.Items.Add(AllChannelsLabel);
 
-            // 读取去重排序后的通道列表，逐项加入下拉。
+            // 读取去重排序后的通道列表，逐项加入下拉；IO 异常在本层兜底，不能让日志页首访失败。
             foreach (var channel in this.logReader.ListChannels(this.dataRoot))
             {
                 this.ChannelComboBox.Items.Add(channel);
             }
 
             // 默认选中首项「全部」。
+            this.ChannelComboBox.SelectedIndex = 0;
+        }
+        catch
+        {
+            this.ChannelComboBox.Items.Clear();
+            this.ChannelComboBox.Items.Add(AllChannelsLabel);
             this.ChannelComboBox.SelectedIndex = 0;
         }
         finally
@@ -115,10 +129,12 @@ public sealed partial class LogsView : UserControl
     /// </summary>
     private async Task LoadLogsAsync()
     {
-        if (string.IsNullOrWhiteSpace(this.dataRoot))
+        if (string.IsNullOrWhiteSpace(this.dataRoot) || this.isLoading)
         {
             return;
         }
+
+        this.isLoading = true;
 
         // 计算过滤通道：选中「全部」或未选则为 null（读取全部通道）。
         var selected = this.ChannelComboBox.SelectedItem as string;
@@ -135,7 +151,7 @@ public sealed partial class LogsView : UserControl
                 .ConfigureAwait(false);
 
             // 切回 UI 线程更新可观察集合（ObservableCollection 仅允许 UI 线程修改）。
-            this.dispatcherQueue.TryEnqueue(() =>
+            if (!this.dispatcherQueue.TryEnqueue(() =>
             {
                 this.logRows.Clear();
                 foreach (var entry in entries)
@@ -146,17 +162,25 @@ public sealed partial class LogsView : UserControl
                 // 根据是否有数据切换空状态与列表的可见性。
                 this.UpdateEmptyState(entries.Count == 0);
                 this.SetLoading(false);
-            });
+                this.isLoading = false;
+            }))
+            {
+                this.isLoading = false;
+            }
         }
         catch (Exception)
         {
             // 读取失败（如 IO 异常）时回到可用状态并显示空提示，避免界面卡在加载态。
-            this.dispatcherQueue.TryEnqueue(() =>
+            if (!this.dispatcherQueue.TryEnqueue(() =>
             {
                 this.logRows.Clear();
                 this.UpdateEmptyState(true);
                 this.SetLoading(false);
-            });
+                this.isLoading = false;
+            }))
+            {
+                this.isLoading = false;
+            }
         }
     }
 
@@ -199,8 +223,7 @@ public sealed partial class LogsView : UserControl
     private void OnRefreshLogsClick(object sender, RoutedEventArgs e)
     {
         // 刷新时一并刷新通道列表（可能产生了新通道的日志文件）。
-        this.PopulateChannels();
-        _ = this.LoadLogsAsync();
+        Refresh();
     }
 
     /// <summary>
@@ -280,6 +303,12 @@ public sealed partial class LogsView : UserControl
     /// <param name="message">正文。</param>
     private async Task ShowMessageAsync(string title, string message)
     {
+        if (this.XamlRoot is null)
+        {
+            // NOTE: 首次导航或窗口关闭竞态下可能尚无 XamlRoot；不能因提示失败二次触发闪退。
+            return;
+        }
+
         var dialog = new ContentDialog
         {
             Title = title,

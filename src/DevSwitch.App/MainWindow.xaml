@@ -915,7 +915,7 @@
                     </Grid>
                 </Grid>
 
-                <ScrollViewer x:Name="SettingsContent" x:Load="False" Visibility="Collapsed">
+                <ScrollViewer x:Name="SettingsContent" Visibility="Collapsed">
                     <StackPanel Padding="36,30,36,44" Spacing="26">
                         <StackPanel Spacing="4">
                             <TextBlock x:Name="SettingsTitleText" FontSize="30" FontWeight="SemiBold" Text="设置" />
@@ -935,7 +935,7 @@
                                         <TextBlock x:Name="SettingsLanguageDescText" FontSize="13" Foreground="{StaticResource DevSwitchMutedTextBrush}" Text="选择 DevSwitch 使用的界面语言，切换后立即生效。" TextWrapping="Wrap" />
                                         <TextBlock x:Name="LanguageStatusText" FontSize="12" Foreground="{StaticResource DevSwitchAccentTextBrush}" Text="当前语言：简体中文" />
                                     </StackPanel>
-                                    <ComboBox x:Name="LanguageComboBox" Grid.Column="1" MinWidth="200" HorizontalAlignment="Right" SelectedIndex="1" SelectionChanged="OnLanguageSelectionChanged">
+                                    <ComboBox x:Name="LanguageComboBox" Grid.Column="1" MinWidth="200" HorizontalAlignment="Right" SelectionChanged="OnLanguageSelectionChanged">
                                         <ComboBoxItem Content="跟随系统" Tag="auto" />
                                         <ComboBoxItem Content="简体中文" Tag="zh-CN" />
                                         <ComboBoxItem Content="English" Tag="en-US" />
@@ -1091,7 +1091,7 @@
                     </StackPanel>
                 </ScrollViewer>
 
-                <Grid x:Name="DoctorContent" x:Load="False" Visibility="Collapsed">
+                <Grid x:Name="DoctorContent" Visibility="Collapsed">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
@@ -1168,10 +1168,10 @@
                 </Grid>
 
                 <!-- 配置档案页：独立 UserControl，自包含增删改与一键应用交互。 -->
-                <views:ProfilesView x:Name="ProfilesContent" x:Load="False" Visibility="Collapsed" />
+                <views:ProfilesView x:Name="ProfilesContent" Visibility="Collapsed" />
 
                 <!-- 日志页：独立 UserControl，异步读取+脱敏展示，支持过滤/刷新/清理。 -->
-                <views:LogsView x:Name="LogsContent" x:Load="False" Visibility="Collapsed" />
+                <views:LogsView x:Name="LogsContent" Visibility="Collapsed" />
 
                 <Grid x:Name="PlaceholderContent" Visibility="Collapsed">
                     <StackPanel HorizontalAlignment="Center" Spacing="8" VerticalAlignment="Center">

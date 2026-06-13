@@ -18,8 +18,8 @@ public sealed class ProfilesNavigationRegressionTests
         string source = ReadRepoFile("src", "DevSwitch.App", "MainWindow.xaml.cs");
         string methodBody = ExtractMethodBody(source, "private void ShowProfilesContent");
 
-        int activateIndex = methodBody.IndexOf("SetActiveContent(profilesContent)", StringComparison.Ordinal);
-        int initializeIndex = methodBody.IndexOf("profilesContent.Initialize(dataRoot)", StringComparison.Ordinal);
+        int activateIndex = methodBody.IndexOf("SetActiveContent(ProfilesContent)", StringComparison.Ordinal);
+        int initializeIndex = methodBody.IndexOf("ProfilesContent.Initialize(dataRoot)", StringComparison.Ordinal);
 
         Assert.True(activateIndex >= 0, "ShowProfilesContent should attach ProfilesContent to the active content tree.");
         Assert.True(initializeIndex >= 0, "ShowProfilesContent should initialize ProfilesContent on first navigation.");
