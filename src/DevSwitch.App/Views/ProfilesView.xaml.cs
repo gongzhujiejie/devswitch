@@ -10,6 +10,7 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using DevSwitch.Core;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -29,24 +30,55 @@ public sealed partial class ProfilesView : UserControl
     // NOTE: Initialize 注入的数据根目录；未初始化时为 null，所有数据操作前先校验。
     private string? _dataRoot;
 
+    // NOTE: SdkProfileStore 内部使用 ConfigureAwait(false)，异步 IO 后必须显式切回 UI 线程更新 WinUI 控件。
+    private readonly DispatcherQueue dispatcherQueue;
+
+    // NOTE: 首次刷新只允许启动一次；Initialize 可能早于 Loaded，也可能在 Loaded 后被调用。
+    private bool isInitialRefreshStarted;
+
     /// <summary>
     /// 构造函数：仅初始化 XAML 组件并绑定列表数据源，不触发任何 IO。
     /// </summary>
     public ProfilesView()
     {
         InitializeComponent();
+
+        // NOTE: 捕获创建控件的 UI 线程调度队列；后续磁盘 IO 完成后必须通过它回切再更新控件树。
+        dispatcherQueue = DispatcherQueue.GetForCurrentThread();
         ProfilesItemsControl.ItemsSource = _items;
+        Loaded += OnProfilesViewLoaded;
     }
 
     /// <summary>
-    /// 注入 DevSwitch 数据根目录并异步加载档案列表刷新 UI。
+    /// 注入 DevSwitch 数据根目录并在视图进入 XAML 树后启动首次刷新。
     /// 由主窗口在创建视图后调用一次。
     /// </summary>
     /// <param name="dataRoot">DevSwitch 数据根目录。</param>
     public void Initialize(string dataRoot)
     {
         _dataRoot = dataRoot;
-        // NOTE: 构造/初始化方法不能 await，这里 fire-and-forget 异步刷新；异常在内部捕获并提示，避免吞掉。
+        StartInitialRefresh();
+    }
+
+    /// <summary>
+    /// 控件加载完成事件：补偿 Initialize 早于 Loaded 的首次导航时序，确保 XamlRoot 已可用于错误提示。
+    /// </summary>
+    private void OnProfilesViewLoaded(object sender, RoutedEventArgs e)
+    {
+        StartInitialRefresh();
+    }
+
+    /// <summary>
+    /// 在 dataRoot 与 XamlRoot 均就绪后只启动一次首次刷新，避免 x:Load=False 首访时错误提示路径二次崩溃。
+    /// </summary>
+    private void StartInitialRefresh()
+    {
+        if (isInitialRefreshStarted || string.IsNullOrWhiteSpace(_dataRoot) || XamlRoot is null)
+        {
+            return;
+        }
+
+        isInitialRefreshStarted = true;
         _ = RefreshAsync();
     }
 
@@ -60,22 +92,40 @@ public sealed partial class ProfilesView : UserControl
             return;
         }
 
+        string dataRootSnapshot = _dataRoot;
         try
         {
-            var catalog = await _profileStore.LoadOrCreateAsync(_dataRoot);
+            // NOTE: profile store 开头包含 File.Exists/Directory.CreateDirectory/File.Move 等同步文件系统调用；
+            // 放入后台线程可避免自定义数据目录位于慢盘/网络盘时，首次点击 Profiles 卡住 UI 线程。
+            var catalog = await Task.Run(() => _profileStore.LoadOrCreateAsync(dataRootSnapshot)).ConfigureAwait(false);
 
-            // NOTE: 全量重建列表，逻辑简单且档案数量通常很少，性能足够且不会出现增量同步偏差。
-            _items.Clear();
-            foreach (var profile in catalog.Profiles)
+            // NOTE: await 之后已不假设仍在 UI 线程。所有 ObservableCollection 与 WinUI 控件更新统一回切调度队列。
+            dispatcherQueue.TryEnqueue(() =>
             {
-                _items.Add(ProfileListItem.FromProfile(profile));
-            }
+                // NOTE: 全量重建列表，逻辑简单且档案数量通常很少，性能足够且不会出现增量同步偏差。
+                _items.Clear();
+                foreach (var profile in catalog.Profiles)
+                {
+                    _items.Add(ProfileListItem.FromProfile(profile));
+                }
 
-            UpdateEmptyState();
+                UpdateEmptyState();
+            });
         }
         catch (Exception ex)
         {
-            await ShowMessageAsync("加载失败", $"读取配置档案时出错：{ex.Message}");
+            // NOTE: 错误展示也必须回 UI 线程，并用二次 try/catch 防止 ContentDialog 自身异常造成进程退出。
+            dispatcherQueue.TryEnqueue(async () =>
+            {
+                try
+                {
+                    await ShowMessageAsync("加载失败", $"读取配置档案时出错：{ex.Message}");
+                }
+                catch
+                {
+                    // NOTE: 异常提示失败时保持页面可用；不让提示路径覆盖原始加载失败并终止进程。
+                }
+            });
         }
     }
 
@@ -260,13 +310,19 @@ public sealed partial class ProfilesView : UserControl
     /// </summary>
     private async Task ShowMessageAsync(string title, string message)
     {
+        if (XamlRoot is null)
+        {
+            // NOTE: x:Load=False 首次导航或窗口关闭竞态下可能尚无 XamlRoot；此时不能弹窗，避免二次异常退出。
+            return;
+        }
+
         var dialog = new ContentDialog
         {
             Title = title,
             Content = message,
             CloseButtonText = "知道了",
             DefaultButton = ContentDialogButton.Close,
-            XamlRoot = this.XamlRoot,
+            XamlRoot = XamlRoot,
         };
 
         await dialog.ShowAsync();

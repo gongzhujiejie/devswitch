@@ -5,6 +5,18 @@
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，
 版本号遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v0.2.12] - 2026-06-13 — 配置档案首访崩溃修复
+
+### 修复（Fixed）
+- **点击配置档案卡死并自动退出**：修复 `ProfilesContent x:Load="False"` 首次导航时的异步加载时序。
+  - 先把 `ProfilesView` 接入活动内容树，再启动数据加载，确保异常提示拥有有效 `XamlRoot`。
+  - `ProfilesView` 首次刷新延迟到 `Loaded` / `XamlRoot` 就绪后执行，避免懒加载阶段提前弹 `ContentDialog`。
+  - 档案读写放入后台线程，异步完成后通过 `DispatcherQueue.TryEnqueue` 回 UI 线程更新列表与空状态，避免跨线程 UI 更新或慢盘 IO 卡住首访点击。
+  - 错误提示路径增加二次保护，防止加载失败后的提示弹窗再次抛异常导致进程退出。
+
+### 测试（Tests）
+- 新增 Profiles 导航回归测试，覆盖首访激活顺序、Initialize 不直接 fire-and-forget 刷新、异步加载后必须回 UI 线程更新。
+
 ## [v0.2.11] - 2026-06-13 — 首帧延迟加载 + ReadyToRun 打包修复
 
 ### 优化（Changed）

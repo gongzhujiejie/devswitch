@@ -934,13 +934,13 @@ public sealed partial class MainWindow : Window
     private void ShowProfilesContent()
     {
         var profilesContent = EnsureDeferredContent<Views.ProfilesView>(nameof(ProfilesContent));
+        SetActiveContent(profilesContent);
+
         if (!isProfilesInitialized)
         {
             profilesContent.Initialize(dataRoot);
             isProfilesInitialized = true;
         }
-
-        SetActiveContent(profilesContent);
     }
 
     /// <summary>
