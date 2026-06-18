@@ -14,5 +14,5 @@ $env:SystemDrive = 'C:'
 $dotnet = 'I:\SoftWare\dotnet\dotnet.exe'
 $publishDir = 'artifacts\package\DevSwitch-win10-x64'
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-$pp = Start-Process -FilePath $dotnet -WorkingDirectory 'I:\lpppp\envoy' -ArgumentList @('publish','src\DevSwitch.App\DevSwitch.App.csproj','--configuration','Release','-p:Platform=x64','--output',$publishDir) -NoNewWindow -Wait -PassThru
+$pp = Start-Process -FilePath $dotnet -WorkingDirectory 'I:\lpppp\envoy' -ArgumentList @('publish','src\DevSwitch.App\DevSwitch.App.csproj','--configuration','Release','--runtime','win10-x64','-p:Platform=x64','-p:UseRidGraph=true','-p:SelfContained=true','-p:PublishSingleFile=false','-p:PublishReadyToRun=true','--output',$publishDir) -NoNewWindow -Wait -PassThru
 Write-Output ("PUBLISH=" + $pp.ExitCode)

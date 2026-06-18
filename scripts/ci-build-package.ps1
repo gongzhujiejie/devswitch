@@ -43,14 +43,18 @@ function Resolve-Tool {
 function Join-ProcessArguments {
     param([string[]]$Arguments)
 
-    return ($Arguments | ForEach-Object {
+    # Windows PowerShell 5.1 对 return 后直接跟复杂管道表达式的解析较脆弱；
+    # 先落入局部变量再返回，保证 CI 与本地 PowerShell 都能稳定解析。
+    $escapedArguments = $Arguments | ForEach-Object {
         if ($_ -match '[\s"]') {
             '"' + ($_ -replace '"', '\"') + '"'
         }
         else {
             $_
         }
-    }) -join ' '
+    }
+
+    return ($escapedArguments -join ' ')
 }
 
 function Invoke-NativeProcess {
@@ -133,6 +137,10 @@ $publishArgs = @(
     '-p:Platform=x64',
     '-p:UseRidGraph=true',
     '-p:NodeReuse=false',
+    # 发布包必须自带 .NET runtime，避免目标机缺少 .NET Desktop Runtime 时弹安装提示。
+    # WinUI 非打包部署仍依赖 XBF/PRI/native DLL loose files，因此明确保持多文件布局。
+    '-p:SelfContained=true',
+    '-p:PublishSingleFile=false',
     # 发布包启用 ReadyToRun，降低用户首次启动时的 JIT 成本；包体略增但换取更快冷启动。
     '-p:PublishReadyToRun=true',
     '--output', $publishDir
@@ -203,6 +211,8 @@ $restoreArgs = @(
     '-p:Platform=x64',
     '-p:UseRidGraph=true',
     '-r', 'win10-x64',
+    '-p:SelfContained=true',
+    '-p:PublishSingleFile=false',
     '-p:PublishReadyToRun=true'
 )
 $restoreExit = Invoke-Dotnet -Arguments $restoreArgs
@@ -244,6 +254,15 @@ foreach ($asset in @('App.xbf', 'MainWindow.xbf', 'DevSwitch.App.pri', 'princess
     }
     elseif (-not (Test-Path $destination)) {
         Write-Warning ('missing asset: ' + $asset)
+    }
+}
+
+# 发布包必须包含 .NET 自包含运行时三件套；这里在压缩前 fail-fast，避免发布出
+# 仍依赖目标机 .NET Desktop Runtime 的 zip。
+foreach ($runtimeFile in @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll')) {
+    $runtimePath = Join-Path $packageDir $runtimeFile
+    if (-not (Test-Path $runtimePath)) {
+        throw ('self-contained publish validation failed: missing ' + $runtimeFile)
     }
 }
 Write-Output 'STEP3: package assembled'

@@ -49,7 +49,7 @@ Write-Output 'STEP1c: updater built'
 # === 2. Release publish App ===
 $publishDir = 'artifacts\package\DevSwitch-win10-x64'
 if (Test-Path $publishDir) { Remove-Item $publishDir -Recurse -Force }
-$publishProc = Start-Process -FilePath $dotnet -WorkingDirectory 'I:\lpppp\envoy' -ArgumentList @('publish', 'src\DevSwitch.App\DevSwitch.App.csproj', '--configuration', 'Release', '-p:Platform=x64', '-p:NodeReuse=false', '--output', $publishDir) -NoNewWindow -Wait -PassThru
+$publishProc = Start-Process -FilePath $dotnet -WorkingDirectory 'I:\lpppp\envoy' -ArgumentList @('publish', 'src\DevSwitch.App\DevSwitch.App.csproj', '--configuration', 'Release', '--runtime', 'win10-x64', '-p:Platform=x64', '-p:UseRidGraph=true', '-p:NodeReuse=false', '-p:SelfContained=true', '-p:PublishSingleFile=false', '-p:PublishReadyToRun=true', '--output', $publishDir) -NoNewWindow -Wait -PassThru
 if ($publishProc.ExitCode -ne 0) { throw "dotnet publish failed: $($publishProc.ExitCode)" }
 # NOTE: 保险起见显式补拷 helper 与 shim。csproj 也声明了发布项，但脚本层兜底可避免复制条件/增量构建导致漏带。
 Copy-Item $helperOutput (Join-Path $publishDir 'DevSwitch.Helper.exe') -Force
@@ -75,6 +75,15 @@ foreach ($asset in @('App.xbf', 'MainWindow.xbf', 'DevSwitch.App.pri', 'princess
     }
     else {
         Write-Warning "missing release asset: $asset"
+    }
+}
+
+# 发布 zip 前确认 .NET 自包含运行时三件套已经进入目录，避免本地人工打包
+# 绕过 CI 防线，重新产出依赖目标机 .NET Desktop Runtime 的包。
+foreach ($runtimeFile in @('coreclr.dll', 'hostfxr.dll', 'hostpolicy.dll')) {
+    $runtimePath = Join-Path $princessDir $runtimeFile
+    if (-not (Test-Path $runtimePath)) {
+        throw ('self-contained publish validation failed: missing ' + $runtimeFile)
     }
 }
 Write-Output 'STEP3: princess package assembled'
