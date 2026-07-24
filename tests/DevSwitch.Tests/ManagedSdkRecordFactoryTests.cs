@@ -89,7 +89,11 @@ public sealed class ManagedSdkRecordFactoryTests
             this.result = result;
         }
 
-        public Task<SdkCommandResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
             => Task.FromResult(result);
     }
 }

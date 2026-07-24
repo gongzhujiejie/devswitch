@@ -288,8 +288,9 @@ public sealed class EnvironmentService
             return EnvironmentOperationResult.Fail("invalid-request", "DEVSWITCH_HOME value is required.");
         }
 
-        // 1) 计算并写入默认变量集。
-        var variables = EnvironmentLayout.BuildDefaultVariables(devSwitchHomeValue, options);
+        // 1) 只为真实存在的 current 入口写 HOME 变量。
+        // 特别是 GOROOT：若 current\go 尚未建立，提前写入会让系统中其它正常 go.exe 全部启动失败。
+        var variables = EnvironmentLayout.BuildExistingCurrentVariables(devSwitchHomeValue, options);
         var writeResult = await WriteVariablesAsync(variables, broadcast: false, cancellationToken);
         if (!writeResult.Success)
         {

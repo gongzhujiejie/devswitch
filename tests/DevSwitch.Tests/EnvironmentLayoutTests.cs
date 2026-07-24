@@ -64,6 +64,78 @@ public sealed class EnvironmentLayoutTests
     }
 
     [Fact]
+    public void BuildExistingCurrentVariablesOmitsDanglingGoRoot()
+    {
+        using var temp = new TemporaryDataRoot();
+        Directory.CreateDirectory(Path.Combine(temp.Root, "current", "java"));
+
+        var variables = EnvironmentLayout.BuildExistingCurrentVariables(temp.Root);
+
+        Assert.Contains(variables, v => v.Name == "DEVSWITCH_HOME" && v.Value == temp.Root);
+        Assert.Contains(variables, v => v.Name == "JAVA_HOME");
+        Assert.DoesNotContain(variables, v => v.Name == "MAVEN_HOME");
+        Assert.DoesNotContain(variables, v => v.Name == "GOROOT");
+    }
+
+    [Fact]
+    public void BuildExistingCurrentVariablesIncludesGoRootWhenCurrentGoExists()
+    {
+        using var temp = new TemporaryDataRoot();
+        var goRoot = Path.Combine(temp.Root, "current", "go");
+        Directory.CreateDirectory(goRoot);
+
+        var variables = EnvironmentLayout.BuildExistingCurrentVariables(temp.Root);
+
+        Assert.Contains(variables, v => v.Name == "GOROOT" && v.Value == goRoot);
+    }
+
+    [Fact]
+    public void BuildCurrentVariableReconciliationClearsDanglingManagedGoRoot()
+    {
+        using var temp = new TemporaryDataRoot();
+        var managedGoRoot = Path.Combine(temp.Root, "current", "go");
+        var existing = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DEVSWITCH_HOME"] = temp.Root,
+            ["GOROOT"] = managedGoRoot,
+        };
+
+        var changes = EnvironmentLayout.BuildCurrentVariableReconciliation(temp.Root, existing);
+
+        Assert.Contains(changes, variable => variable is { Name: "GOROOT", Value: "" });
+    }
+
+    [Fact]
+    public void BuildCurrentVariableReconciliationPreservesCustomGoRoot()
+    {
+        using var temp = new TemporaryDataRoot();
+        var existing = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DEVSWITCH_HOME"] = temp.Root,
+            ["GOROOT"] = @"D:\Programs\Go",
+        };
+
+        var changes = EnvironmentLayout.BuildCurrentVariableReconciliation(temp.Root, existing);
+
+        Assert.DoesNotContain(changes, variable => variable.Name == "GOROOT");
+    }
+
+    [Fact]
+    public void BuildCurrentVariableReconciliationWritesGoRootWhenCurrentExists()
+    {
+        using var temp = new TemporaryDataRoot();
+        var goRoot = Path.Combine(temp.Root, "current", "go");
+        Directory.CreateDirectory(goRoot);
+
+        var changes = EnvironmentLayout.BuildCurrentVariableReconciliation(
+            temp.Root,
+            new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase));
+
+        Assert.Contains(changes, variable => variable.Name == "DEVSWITCH_HOME" && variable.Value == temp.Root);
+        Assert.Contains(changes, variable => variable.Name == "GOROOT" && variable.Value == goRoot);
+    }
+
+    [Fact]
     public void BuildDefaultVariablesRejectsEmptyHome()
     {
         Assert.Throws<ArgumentException>(() => EnvironmentLayout.BuildDefaultVariables("  "));
@@ -414,5 +486,29 @@ public sealed class EnvironmentLayoutTests
     {
         Assert.Equal(name, variable.Name);
         Assert.Equal(value, variable.Value);
+    }
+
+    /// <summary>为 current 入口存在性测试提供隔离的数据根，测试结束后自动清理。</summary>
+    private sealed class TemporaryDataRoot : IDisposable
+    {
+        public TemporaryDataRoot()
+        {
+            Root = Path.Combine(Path.GetTempPath(), "DevSwitch.Tests", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Root);
+        }
+
+        public string Root { get; }
+
+        public void Dispose()
+        {
+            try
+            {
+                Directory.Delete(Root, recursive: true);
+            }
+            catch
+            {
+                // 临时目录清理失败不影响业务断言。
+            }
+        }
     }
 }

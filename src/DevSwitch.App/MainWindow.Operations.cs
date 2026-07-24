@@ -104,7 +104,7 @@ public sealed partial class MainWindow
             string dialogTitle = "切换成功";
             try
             {
-                note = await FinalizeSwitchEnvironmentAsync(row.Type);
+                note = await FinalizeSwitchEnvironmentAsync();
             }
             catch (Exception ex)
             {
@@ -813,31 +813,52 @@ public sealed partial class MainWindow
         return machinePath.TrimEnd(';') + ";" + userPath.TrimStart(';');
     }
 
+    private static IReadOnlyDictionary<string, string?> ReadManagedUserEnvironmentVariables()
+    {
+        string[] names =
+        [
+            EnvironmentLayout.DevSwitchHomeName,
+            "JAVA_HOME",
+            "JDK_HOME",
+            "MAVEN_HOME",
+            "M2_HOME",
+            "GOROOT",
+        ];
+
+        return names.ToDictionary(
+            name => name,
+            name => Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
     /// <summary>
     /// 切换后的环境收尾（shim 单目录方案）：
-    /// 1) 确保用户级 HOME 变量已写（JAVA_HOME/MAVEN_HOME/GOROOT 指向 current，幂等，无 UAC）；
+    /// 1) 仅为真实存在的 current 入口写用户级 HOME 变量，避免生成悬空 GOROOT；
     /// 2) rebuildShims：按 current 下真实可执行刷新 shims；
     /// 3) 确保系统 PATH 含 shims 目录（仅缺失时按需提权一次写入）。
     /// 返回用于切换对话框的说明文本。
     /// </summary>
-    private async Task<string> FinalizeSwitchEnvironmentAsync(SdkType type)
+    private async Task<string> FinalizeSwitchEnvironmentAsync()
     {
         var sb = new System.Text.StringBuilder();
 
-        // 1) 写用户级 HOME 变量（不含 PATH，不占系统 PATH 条目；mvn 等依赖 JAVA_HOME）。
+        // 1) 对用户级 HOME 变量做最小协调（不含 PATH，不占系统 PATH 条目）。
+        // 若 current\go 尚不存在，只清除可确认属于 DevSwitch 的悬空 GOROOT；用户自定义值不碰。
         var environmentService = appServices.CreateEnvironmentService();
-        var variables = new[]
-        {
-            new EnvironmentVariable(EnvironmentLayout.DevSwitchHomeName, dataRoot),
-            new EnvironmentVariable("JAVA_HOME", System.IO.Path.Combine(dataRoot, "current", "java")),
-            new EnvironmentVariable("MAVEN_HOME", System.IO.Path.Combine(dataRoot, "current", "maven")),
-            new EnvironmentVariable("GOROOT", System.IO.Path.Combine(dataRoot, "current", "go")),
-        };
-        var writeResult = await environmentService.WriteVariablesAsync(variables, broadcast: false, windowLifetime.Token);
+        var variables = EnvironmentLayout.BuildCurrentVariableReconciliation(dataRoot, ReadManagedUserEnvironmentVariables());
         sb.Append("\n\n已更新环境：");
-        sb.Append(writeResult.Success
-            ? "\n· 用户变量 DEVSWITCH_HOME / JAVA_HOME / MAVEN_HOME / GOROOT ✓"
-            : $"\n· ⚠ 用户变量写入未完成（{writeResult.ErrorCode}）");
+        if (variables.Count == 0)
+        {
+            sb.Append("\n· 用户变量已是最新 ✓");
+        }
+        else
+        {
+            var writeResult = await environmentService.WriteVariablesAsync(variables, broadcast: false, windowLifetime.Token);
+            string variableNames = string.Join(" / ", variables.Select(variable => variable.Name));
+            sb.Append(writeResult.Success
+                ? $"\n· 用户变量 {variableNames} ✓"
+                : $"\n· ⚠ 用户变量写入未完成（{writeResult.ErrorCode}）");
+        }
 
         // 2) 重建 shims（按 current 下真实可执行）。shim 源由 App 随包提供。
         if (string.IsNullOrWhiteSpace(appServices.ShimPath))
@@ -1783,11 +1804,10 @@ public sealed partial class MainWindow
 
     // ===================== 数据目录 =====================
     /// <summary>
-    /// 启动时检测并校正环境位置漂移：
-    /// 若用户移动了工具目录（便携模式），HKCU 里 DEVSWITCH_HOME 仍指向旧路径，
-    /// 导致 JAVA_HOME/MAVEN_HOME/GOROOT（引用 %DEVSWITCH_HOME%）全部失效。
-    /// 这里把 DEVSWITCH_HOME 重写为当前实际数据根并广播——其余变量与 current 链接自动跟随，无需重建。
-    /// 仅在「之前已初始化过环境」且「确实漂移」时才动手；helper 不可用则静默跳过。
+    /// 启动时校正 DevSwitch 管理的用户环境：
+    /// - 工具目录移动时更新 DEVSWITCH_HOME 与已有 current 入口的 HOME 变量；
+    /// - 目录未移动但旧版本留下悬空 current 变量（尤其 GOROOT）时，仅清理可确认属于 DevSwitch 的旧值。
+    /// 从未初始化过 DevSwitch 环境时不触碰用户变量；helper 不可用则静默跳过。
     /// </summary>
     private async Task CorrectEnvironmentDriftAsync()
     {
@@ -1798,9 +1818,9 @@ public sealed partial class MainWindow
                 EnvironmentLayout.DevSwitchHomeName, EnvironmentVariableTarget.User);
 
             var drift = EnvironmentDriftDetector.Detect(dataRoot, registered);
-            if (!drift.IsInitialized || !drift.HasDrift)
+            if (!drift.IsInitialized)
             {
-                // 从未初始化（首次切换时才写）或路径一致：无需校正。
+                // 从未初始化：不把 DevSwitch 自动写入用户环境，首次切换时再建立。
                 return;
             }
 
@@ -1810,17 +1830,24 @@ public sealed partial class MainWindow
                 return;
             }
 
-            // 重写 DEVSWITCH_HOME 为当前数据根绝对路径，并广播 WM_SETTINGCHANGE。
+            var variables = EnvironmentLayout.BuildCurrentVariableReconciliation(
+                dataRoot,
+                ReadManagedUserEnvironmentVariables());
+            if (variables.Count == 0)
+            {
+                return;
+            }
+
             var environmentService = appServices.CreateEnvironmentService();
-            var variables = new[] { new EnvironmentVariable(EnvironmentLayout.DevSwitchHomeName, dataRoot) };
             var result = await environmentService.WriteVariablesAsync(variables, broadcast: true, windowLifetime.Token);
 
-            if (result.Success)
+            if (result.Success && drift.HasDrift)
             {
+                string variableNames = string.Join(" / ", variables.Select(variable => variable.Name));
                 await ShowSimpleDialogAsync(
                     "已校正环境位置",
-                    $"检测到工具目录已移动，DEVSWITCH_HOME 已更新为：\n{dataRoot}\n\n" +
-                    "JAVA_HOME / MAVEN_HOME / GOROOT 会自动跟随。已打开的终端需重启后生效。");
+                    $"检测到工具目录已移动，已更新：{variableNames}\n新数据目录：\n{dataRoot}\n\n" +
+                    "已打开的终端需重启后生效。");
             }
         }
         catch (OperationCanceledException)

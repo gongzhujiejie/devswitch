@@ -60,6 +60,10 @@ public sealed class DoctorServiceTests
     public async Task EnvironmentCheckReportsWarningWhenSomeVariablesMissing()
     {
         var dataRoot = CreateWritableDataRoot();
+        // 只有已建立 current 入口的 SDK 才应要求对应 HOME 变量。
+        Directory.CreateDirectory(Path.Combine(dataRoot, "current", "java"));
+        Directory.CreateDirectory(Path.Combine(dataRoot, "current", "maven"));
+        Directory.CreateDirectory(Path.Combine(dataRoot, "current", "go"));
         // 只提供部分变量。
         var env = new FakeEnvironmentReader(dataRoot)
         {
@@ -79,6 +83,26 @@ public sealed class DoctorServiceTests
 
         Assert.Equal(DiagnosticSeverity.Warning, result.Severity);
         Assert.Contains("MAVEN_HOME", result.Detail);
+    }
+
+    [Fact]
+    public async Task EnvironmentCheckDoesNotRequireGoRootWhenCurrentGoIsMissing()
+    {
+        var dataRoot = CreateWritableDataRoot();
+        var env = new FakeEnvironmentReader(dataRoot)
+        {
+            Variables =
+            {
+                ["DEVSWITCH_HOME"] = dataRoot,
+            },
+        };
+        env.SetManagedPathPresent(dataRoot);
+
+        var service = CreateService(dataRoot, env);
+        var report = await service.RunAsync();
+        var result = Single(report, "hkcu-environment");
+
+        Assert.Equal(DiagnosticSeverity.Pass, result.Severity);
     }
 
     [Fact]

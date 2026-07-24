@@ -67,7 +67,14 @@ public sealed class SdkImportVerificationService
         }
 
         var (fileName, arguments) = SdkVerificationService.ResolveVersionCommand(record.Type, record.Path);
-        var commandResult = await commandRunner.RunAsync(fileName, arguments, DefaultCommandTimeout, cancellationToken)
+        var environment = SdkVerificationService.BuildCommandEnvironment(record.Type, record.Path);
+        var commandResult = await RunCommandAsync(
+                commandRunner,
+                fileName,
+                arguments,
+                DefaultCommandTimeout,
+                environment,
+                cancellationToken)
             .ConfigureAwait(false);
         var command = BuildCommandVerificationResult(record.Type, fileName, commandResult);
 
@@ -146,5 +153,21 @@ public sealed class SdkImportVerificationService
             StdOut: result.StdOut,
             StdErr: result.StdErr,
             Message: $"Resolved version {parsed}.");
+    }
+
+    private static Task<SdkCommandResult> RunCommandAsync(
+        ISdkCommandRunner runner,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        IReadOnlyDictionary<string, string>? environment,
+        CancellationToken cancellationToken)
+    {
+        if (environment is { Count: > 0 } && runner is ISdkCommandEnvironmentRunner environmentRunner)
+        {
+            return environmentRunner.RunAsync(fileName, arguments, timeout, environment, cancellationToken);
+        }
+
+        return runner.RunAsync(fileName, arguments, timeout, cancellationToken);
     }
 }

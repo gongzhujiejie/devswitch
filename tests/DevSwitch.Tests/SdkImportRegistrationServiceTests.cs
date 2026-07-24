@@ -116,7 +116,11 @@ public sealed class SdkImportRegistrationServiceTests
 
         public int InvocationCount { get; private set; }
 
-        public Task<SdkCommandResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
         {
             InvocationCount++;
             return Task.FromResult(result);

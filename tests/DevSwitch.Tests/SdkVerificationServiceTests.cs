@@ -63,6 +63,16 @@ public sealed class SdkVerificationServiceTests
     }
 
     [Theory]
+    [InlineData("go version go1.27rc2 windows/amd64", "1.27rc2")]
+    [InlineData("go version go1.27beta1 windows/amd64", "1.27beta1")]
+    public void ParseVersionPreservesGoPrereleaseSuffix(string stdout, string expected)
+    {
+        var version = SdkVerificationService.ParseVersion(SdkType.Go, stdout, string.Empty);
+
+        Assert.Equal(expected, version);
+    }
+
+    [Theory]
     [InlineData("rustc 1.78.0 (9b00956e5 2024-04-29)", "1.78.0")]
     [InlineData("rustc 1.80.0-nightly (abc123 2024-05-01)", "1.80.0-nightly")]
     [InlineData("rustc 1.79.0-beta (abc123 2024-05-01)", "1.79.0-beta")]
@@ -185,6 +195,27 @@ public sealed class SdkVerificationServiceTests
     }
 
     [Fact]
+    public void BuildCommandEnvironmentPinsGoRootToRecordPath()
+    {
+        // 即使父进程继承了失效的全局 GOROOT，验证候选 Go SDK 时也必须以记录路径为准，
+        // 否则绝对 go.exe 仍会被旧 GOROOT 污染并误判为不可用。
+        const string root = "C:\\tools\\go-1.27rc2";
+
+        var environment = SdkVerificationService.BuildCommandEnvironment(SdkType.Go, root);
+
+        Assert.NotNull(environment);
+        Assert.Equal(root, environment!["GOROOT"]);
+    }
+
+    [Fact]
+    public void BuildCommandEnvironmentDoesNotOverrideNonGoSdk()
+    {
+        var environment = SdkVerificationService.BuildCommandEnvironment(SdkType.Java, "C:\\jdks\\jdk-21");
+
+        Assert.Null(environment);
+    }
+
+    [Fact]
     public void ResolveVersionCommandReturnsAbsoluteRustcExecutable()
     {
         // Rust 命令验证必须跑记录自身 bin/rustc.exe，避免被用户全局 .cargo/bin proxy 遮蔽。
@@ -267,6 +298,24 @@ public sealed class SdkVerificationServiceTests
         Assert.Equal(Path.Combine(root, "bin", "rustc.exe"), runner.LastFileName);
         Assert.Equal(CommandVerificationOutcome.Verified, result.Outcome);
         Assert.Equal("1.78.0", result.ParsedVersion);
+    }
+
+    [Fact]
+    public async Task RunCommandVerificationPassesCandidateGoRootToRunner()
+    {
+        const string root = "C:\\tools\\go-1.27rc2";
+        var record = NewGoRecord(root);
+        var runner = new FakeCommandRunner(new SdkCommandResult(
+            Started: true, ExitCode: 0,
+            StdOut: "go version go1.27rc2 windows/amd64",
+            StdErr: string.Empty, TimedOut: false));
+        var service = new SdkVerificationService(new FakeLinkInspector(CurrentLinkInfo.Missing), runner);
+
+        var result = await service.RunCommandVerificationAsync(record);
+
+        Assert.Equal(CommandVerificationOutcome.Verified, result.Outcome);
+        Assert.NotNull(runner.LastEnvironment);
+        Assert.Equal(root, runner.LastEnvironment!["GOROOT"]);
     }
 
     [Fact]
@@ -361,6 +410,19 @@ public sealed class SdkVerificationServiceTests
         CreatedAt: DateTimeOffset.UnixEpoch,
         LastVerifiedAt: null);
 
+    private static SdkRecord NewGoRecord(string path) => new(
+        Id: "go-test",
+        Type: SdkType.Go,
+        Name: "Go 1.27rc2",
+        Version: "1.27rc2",
+        Distribution: "go",
+        Architecture: SdkArchitecture.X64,
+        Source: SdkSourceKind.External,
+        Path: path,
+        Status: SdkRecordStatus.Unverified,
+        CreatedAt: DateTimeOffset.UnixEpoch,
+        LastVerifiedAt: null);
+
     /// <summary>构造一个临时 JDK 目录，可选写入关键命令文件。</summary>
     private sealed class TempJavaHome : IDisposable
     {
@@ -393,17 +455,33 @@ public sealed class SdkVerificationServiceTests
     }
 
     /// <summary>记录调用次数并返回固定结果的 fake 命令执行器。</summary>
-    private sealed class FakeCommandRunner(SdkCommandResult? result = null) : ISdkCommandRunner
+    private sealed class FakeCommandRunner(SdkCommandResult? result = null) : ISdkCommandEnvironmentRunner
     {
         public int InvocationCount { get; private set; }
 
         // 捕获最近一次传入的可执行文件名，用于断言验证使用的是记录绝对路径而非裸命令名。
         public string? LastFileName { get; private set; }
 
-        public Task<SdkCommandResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default)
+        // 捕获子进程环境覆盖，确保 Go 验证不会继承父进程中的陈旧 GOROOT。
+        public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
+
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+            => RunAsync(fileName, arguments, timeout, new Dictionary<string, string>(), cancellationToken);
+
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            IReadOnlyDictionary<string, string> environment,
+            CancellationToken cancellationToken = default)
         {
             InvocationCount++;
             LastFileName = fileName;
+            LastEnvironment = environment;
             return Task.FromResult(result ?? new SdkCommandResult(true, 0, string.Empty, string.Empty, false));
         }
     }

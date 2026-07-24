@@ -138,8 +138,25 @@ public sealed class DevSwitchEnvironmentExpectations
             throw new ArgumentException("Data root is required.", nameof(dataRoot));
         }
 
-        // NOTE: 默认变量取自设计文档第 8 节；DEVSWITCH_HOME 指向 dataRoot，其余指向 current 入口。
-        ExpectedVariableNames = new[] { "DEVSWITCH_HOME", "JAVA_HOME", "MAVEN_HOME", "GOROOT" };
+        // DEVSWITCH_HOME 始终必须存在；其余 HOME 变量仅在对应 current 入口真实存在时要求。
+        // 这样“尚未启用 Go/Maven”是合法状态，不会被 Doctor 误报为环境缺失。
+        var expectedVariables = new List<string> { "DEVSWITCH_HOME" };
+        if (Directory.Exists(Path.Combine(dataRoot, "current", "java")))
+        {
+            expectedVariables.Add("JAVA_HOME");
+        }
+
+        if (Directory.Exists(Path.Combine(dataRoot, "current", "maven")))
+        {
+            expectedVariables.Add("MAVEN_HOME");
+        }
+
+        if (Directory.Exists(Path.Combine(dataRoot, "current", "go")))
+        {
+            expectedVariables.Add("GOROOT");
+        }
+
+        ExpectedVariableNames = expectedVariables;
 
         // shim 单目录方案：DevSwitch 只需 PATH 中存在唯一的 shims 目录即可覆盖 java/mvn/node/go 全部命令，
         // 不再要求 current\<type>\bin 多条片段。这样系统 PATH 只占 1 条，根治 2047 上限。

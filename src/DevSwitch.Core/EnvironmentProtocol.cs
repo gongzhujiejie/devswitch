@@ -182,6 +182,138 @@ public static class EnvironmentLayout
     }
 
     /// <summary>
+    /// 仅为当前真实存在的 SDK 入口生成 HOME 变量，避免写入悬空的 JAVA_HOME/MAVEN_HOME/GOROOT。
+    /// </summary>
+    /// <param name="devSwitchHomeValue">DevSwitch 数据根目录，可包含环境变量占位符。</param>
+    /// <param name="options">兼容变量选项。</param>
+    /// <returns>始终包含 DEVSWITCH_HOME；其余变量仅在对应 current 入口存在时出现。</returns>
+    /// <remarks>
+    /// Go 命令会严格读取全局 GOROOT。若在尚未激活 Go 时提前写入 current\go，任何其它正常
+    /// go.exe 都会因该目录不存在而直接失败。因此环境初始化和切换收尾必须使用本方法。
+    /// </remarks>
+    public static IReadOnlyList<EnvironmentVariable> BuildExistingCurrentVariables(
+        string devSwitchHomeValue,
+        EnvironmentCompatibilityOptions? options = null)
+    {
+        var variables = BuildDefaultVariables(devSwitchHomeValue, options);
+        string probeRoot = Environment.ExpandEnvironmentVariables(devSwitchHomeValue);
+        bool javaExists = Directory.Exists(Path.Combine(probeRoot, "current", "java"));
+        bool mavenExists = Directory.Exists(Path.Combine(probeRoot, "current", "maven"));
+        bool goExists = Directory.Exists(Path.Combine(probeRoot, "current", "go"));
+
+        return variables.Where(variable => variable.Name switch
+        {
+            DevSwitchHomeName => true,
+            "JAVA_HOME" or "JDK_HOME" => javaExists,
+            "MAVEN_HOME" or "M2_HOME" => mavenExists,
+            "GOROOT" => goExists,
+            _ => true,
+        }).ToArray();
+    }
+
+    /// <summary>
+    /// 计算用户环境变量的最小修复集：写入当前存在的入口，并清除可确认属于 DevSwitch 的悬空旧值。
+    /// </summary>
+    /// <param name="devSwitchHomeValue">当前 DevSwitch 数据根目录。</param>
+    /// <param name="existingVariables">当前用户级环境变量快照。</param>
+    /// <param name="options">兼容变量选项。</param>
+    /// <returns>仅包含需要新增、更新或清空的变量。</returns>
+    public static IReadOnlyList<EnvironmentVariable> BuildCurrentVariableReconciliation(
+        string devSwitchHomeValue,
+        IReadOnlyDictionary<string, string?> existingVariables,
+        EnvironmentCompatibilityOptions? options = null)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(devSwitchHomeValue);
+        ArgumentNullException.ThrowIfNull(existingVariables);
+
+        var desired = BuildExistingCurrentVariables(devSwitchHomeValue, options);
+        var changes = desired
+            .Where(variable => !string.Equals(
+                existingVariables.TryGetValue(variable.Name, out var current) ? current : null,
+                variable.Value,
+                StringComparison.Ordinal))
+            .ToList();
+
+        var roots = new List<string> { Environment.ExpandEnvironmentVariables(devSwitchHomeValue) };
+        if (existingVariables.TryGetValue(DevSwitchHomeName, out var registeredHome)
+            && !string.IsNullOrWhiteSpace(registeredHome))
+        {
+            roots.Add(Environment.ExpandEnvironmentVariables(registeredHome));
+        }
+
+        foreach (var managedVariable in ManagedCurrentVariableSlugs(options))
+        {
+            if (desired.Any(variable => string.Equals(variable.Name, managedVariable.Name, StringComparison.OrdinalIgnoreCase)))
+            {
+                continue;
+            }
+
+            if (!existingVariables.TryGetValue(managedVariable.Name, out var current)
+                || !IsManagedCurrentValue(current, roots, managedVariable.Slug))
+            {
+                continue;
+            }
+
+            // 只清理形状明确属于 DevSwitch current 入口的值，用户自定义 GOROOT/JAVA_HOME 不碰。
+            changes.Add(new EnvironmentVariable(managedVariable.Name, string.Empty));
+        }
+
+        return changes;
+    }
+
+    private static IEnumerable<(string Name, string Slug)> ManagedCurrentVariableSlugs(EnvironmentCompatibilityOptions? options)
+    {
+        yield return ("JAVA_HOME", "java");
+        if (options?.SetJdkHome == true)
+        {
+            yield return ("JDK_HOME", "java");
+        }
+
+        yield return ("MAVEN_HOME", "maven");
+        if (options?.SetM2Home == true)
+        {
+            yield return ("M2_HOME", "maven");
+        }
+
+        yield return ("GOROOT", "go");
+    }
+
+    private static bool IsManagedCurrentValue(string? value, IEnumerable<string> roots, string slug)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        if (value.Equals($"%DEVSWITCH_HOME%\\current\\{slug}", StringComparison.OrdinalIgnoreCase)
+            || value.Equals($"%DEVSWITCH_HOME%/current/{slug}", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (var root in roots)
+        {
+            string expected = Path.Combine(root, "current", slug);
+            try
+            {
+                if (string.Equals(
+                    Path.GetFullPath(value).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    Path.GetFullPath(expected).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+            catch (ArgumentException)
+            {
+                // 非路径格式的用户变量不属于 DevSwitch current，保留它。
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// 生成 DevSwitch 托管 PATH 片段（遗留占位符版本），顺序固定：java、maven、node、go、rust。
     /// </summary>
     /// <remarks>

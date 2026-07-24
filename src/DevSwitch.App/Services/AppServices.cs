@@ -432,7 +432,7 @@ internal sealed class HelperSdkLinkInspector : ISdkLinkInspector
 /// <summary>
 /// 基于 System.Diagnostics.Process 的命令执行器（验证服务用的 <see cref="ISdkCommandRunner"/>），含超时控制。
 /// </summary>
-internal sealed class ProcessSdkCommandRunner : ISdkCommandRunner
+internal sealed class ProcessSdkCommandRunner : ISdkCommandEnvironmentRunner
 {
     // 解析一个有效的 JAVA_HOME（active Java 记录路径），为 mvn 命令验证注入；可为 null。
     private readonly Func<string?>? javaHomeResolver;
@@ -443,26 +443,43 @@ internal sealed class ProcessSdkCommandRunner : ISdkCommandRunner
     }
 
     /// <inheritdoc />
-    public async Task<SdkCommandResult> RunAsync(
+    public Task<SdkCommandResult> RunAsync(
         string fileName,
         IReadOnlyList<string> arguments,
         TimeSpan timeout,
         CancellationToken cancellationToken = default)
+        => RunAsync(fileName, arguments, timeout, new Dictionary<string, string>(), cancellationToken);
+
+    /// <inheritdoc />
+    public async Task<SdkCommandResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        IReadOnlyDictionary<string, string> environment,
+        CancellationToken cancellationToken = default)
     {
+        // 先复制 Core 按记录生成的覆盖（Go 会把 GOROOT 固定到候选 SDK 根目录），
+        // 只影响本次验证子进程，绝不修改用户注册表或 App 自身进程环境。
+        var env = new Dictionary<string, string>(environment, StringComparer.OrdinalIgnoreCase);
+
         // mvn.cmd 依赖 JAVA_HOME 定位 java；若系统 JAVA_HOME 无效会退出码 1。
         // 验证 Maven 时为子进程注入一个有效 JAVA_HOME（取 active Java 记录路径），不改本机环境。
-        IReadOnlyDictionary<string, string>? env = null;
         string leaf = Path.GetFileName(fileName);
         if (leaf.StartsWith("mvn", StringComparison.OrdinalIgnoreCase) && javaHomeResolver is not null)
         {
             string? javaHome = javaHomeResolver();
             if (!string.IsNullOrWhiteSpace(javaHome) && Directory.Exists(javaHome))
             {
-                env = new Dictionary<string, string> { ["JAVA_HOME"] = javaHome };
+                env["JAVA_HOME"] = javaHome;
             }
         }
 
-        var execution = await ProcessExecution.RunAsync(fileName, arguments, timeout, cancellationToken, env).ConfigureAwait(false);
+        var execution = await ProcessExecution.RunAsync(
+            fileName,
+            arguments,
+            timeout,
+            cancellationToken,
+            env.Count == 0 ? null : env).ConfigureAwait(false);
         return new SdkCommandResult(execution.Started, execution.ExitCode, execution.StdOut, execution.StdErr, execution.TimedOut);
     }
 }

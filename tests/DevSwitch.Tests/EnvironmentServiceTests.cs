@@ -17,19 +17,21 @@ public sealed class EnvironmentServiceTests
     {
         var helper = new FakeEnvironmentHelperClient();
         var service = new EnvironmentService(helper);
+        string dataRoot = Path.Combine(Path.GetTempPath(), "DevSwitch.Tests", Guid.NewGuid().ToString("N"));
 
-        var result = await service.InitializeEnvironmentAsync(@"%LOCALAPPDATA%\DevSwitch");
+        var result = await service.InitializeEnvironmentAsync(dataRoot);
 
         Assert.True(result.Success);
         // 调用顺序：先写变量，再置顶 PATH（修复遮蔽），最后广播一次。
-        Assert.Equal(1, helper.WriteCalls.Count);
+        Assert.Single(helper.WriteCalls);
         // 行为修正：初始化用 prepend 置顶而非 append 追加，避免被用户残留项遮蔽。
-        Assert.Equal(1, helper.PrependCalls.Count);
-        Assert.Equal(0, helper.AppendCalls.Count);
+        Assert.Single(helper.PrependCalls);
+        Assert.Empty(helper.AppendCalls);
         Assert.Equal(1, helper.BroadcastCalls);
-        // 写入了默认 4 个变量。
-        Assert.Equal(4, helper.WriteCalls[0].Count);
+        // 尚无任何 current 入口时只写 DEVSWITCH_HOME，禁止提前写入悬空 GOROOT。
+        Assert.Single(helper.WriteCalls[0]);
         Assert.Contains(helper.WriteCalls[0], v => v.Name == "DEVSWITCH_HOME");
+        Assert.DoesNotContain(helper.WriteCalls[0], v => v.Name == "GOROOT");
         // 置顶了 5 个托管 PATH 片段（本质：初始化会把托管片段写入 Path）。
         Assert.Equal(5, helper.PrependCalls[0].Count);
     }

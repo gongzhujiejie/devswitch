@@ -65,7 +65,33 @@ public interface ISdkCommandRunner
     /// <param name="timeout">命令超时时间，超时由实现负责终止进程。</param>
     /// <param name="cancellationToken">取消令牌。</param>
     /// <returns>命令执行结果，包含是否启动、退出码、输出与是否超时。</returns>
-    Task<SdkCommandResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default);
+    Task<SdkCommandResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// 可选的命令环境覆盖能力，不破坏旧版 ISdkCommandRunner 实现。
+/// </summary>
+public interface ISdkCommandEnvironmentRunner : ISdkCommandRunner
+{
+    /// <summary>
+    /// 使用仅作用于当前子进程的环境覆盖运行命令。
+    /// </summary>
+    /// <param name="fileName">可执行文件路径。</param>
+    /// <param name="arguments">命令参数列表。</param>
+    /// <param name="timeout">命令超时时间。</param>
+    /// <param name="environment">子进程环境变量覆盖。</param>
+    /// <param name="cancellationToken">取消令牌。</param>
+    /// <returns>命令执行结果。</returns>
+    Task<SdkCommandResult> RunAsync(
+        string fileName,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        IReadOnlyDictionary<string, string> environment,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

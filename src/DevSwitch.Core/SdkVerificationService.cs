@@ -32,8 +32,8 @@ public sealed partial class SdkVerificationService
     [GeneratedRegex("v?([0-9]+\\.[0-9]+\\.[0-9]+)")]
     private static partial Regex NodeVersionRegex();
 
-    // 解析 go version：形如 go1.22.0，捕获组 1 为 go 前缀后的数字版本串。
-    [GeneratedRegex("go([0-9]+\\.[0-9]+(?:\\.[0-9]+)?)", RegexOptions.IgnoreCase)]
+    // 解析 go version：兼容 stable（go1.22.0）与预发布（go1.27rc2 / go1.27beta1）。
+    [GeneratedRegex("go([0-9]+\\.[0-9]+(?:\\.[0-9]+)?(?:(?:rc|beta)[0-9]+)?)", RegexOptions.IgnoreCase)]
     private static partial Regex GoVersionRegex();
 
     // 解析 rustc --version：形如 rustc 1.78.0 / rustc 1.80.0-nightly，捕获组 1 为 Rust 编译器版本。
@@ -100,8 +100,18 @@ public sealed partial class SdkVerificationService
         //         Maven 因不在 PATH 而报「未能启动」。改为基于 record.Path 解析。
         var (fileName, arguments) = ResolveVersionCommand(record.Type, record.Path);
 
-        // 超时由 runner 负责，服务只透传默认超时与取消令牌。
-        var result = await commandRunner.RunAsync(fileName, arguments, DefaultCommandTimeout, cancellationToken).ConfigureAwait(false);
+        // Go 会读取父进程 GOROOT；验证候选 SDK 时必须把 GOROOT 固定到记录自身路径，
+        // 避免用户环境中陈旧/悬空的 GOROOT 让一个结构完整的 Go SDK 被误判为不可用。
+        var environment = BuildCommandEnvironment(record.Type, record.Path);
+
+        // 超时由 runner 负责，服务只透传默认超时、取消令牌与子进程环境覆盖。
+        var result = await RunCommandAsync(
+            commandRunner,
+            fileName,
+            arguments,
+            DefaultCommandTimeout,
+            environment,
+            cancellationToken).ConfigureAwait(false);
 
         // 未启动：可执行文件不存在或无法解析（runner 返回 Started=false）。
         // message 直接带上绝对路径，便于定位「该路径下找不到可执行文件」。
@@ -364,6 +374,46 @@ public sealed partial class SdkVerificationService
             SdkType.Rust => (Path.Combine(rootPath, "bin", "rustc.exe"), new[] { "--version" }),
             _ => throw new ArgumentOutOfRangeException(nameof(sdkType), sdkType, "Unsupported SDK type for command verification."),
         };
+    }
+
+    /// <summary>
+    /// 生成版本命令专用的子进程环境覆盖。
+    /// </summary>
+    /// <param name="sdkType">SDK 类型。</param>
+    /// <param name="rootPath">当前被验证记录的根目录。</param>
+    /// <returns>Go 返回固定到候选根目录的 GOROOT；其它类型无需额外覆盖。</returns>
+    public static IReadOnlyDictionary<string, string>? BuildCommandEnvironment(SdkType sdkType, string rootPath)
+    {
+        if (sdkType != SdkType.Go)
+        {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(rootPath))
+        {
+            throw new ArgumentException("Go SDK root path is required.", nameof(rootPath));
+        }
+
+        return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["GOROOT"] = Path.TrimEndingDirectorySeparator(rootPath),
+        };
+    }
+
+    private static Task<SdkCommandResult> RunCommandAsync(
+        ISdkCommandRunner runner,
+        string fileName,
+        IReadOnlyList<string> arguments,
+        TimeSpan timeout,
+        IReadOnlyDictionary<string, string>? environment,
+        CancellationToken cancellationToken)
+    {
+        if (environment is { Count: > 0 } && runner is ISdkCommandEnvironmentRunner environmentRunner)
+        {
+            return environmentRunner.RunAsync(fileName, arguments, timeout, environment, cancellationToken);
+        }
+
+        return runner.RunAsync(fileName, arguments, timeout, cancellationToken);
     }
 
     /// <summary>

@@ -76,6 +76,27 @@ public sealed class SdkImportVerificationServiceTests
         Assert.NotNull(result.Record.LastVerifiedAt);
     }
 
+    [Fact]
+    public async Task VerifyAsyncPinsGoRootToImportedSdkPath()
+    {
+        var goRoot = CreateGoRoot("go-1.27rc2");
+        var record = NewRecord(SdkType.Go, goRoot, version: SdkVersionResolver.UnknownVersion);
+        var runner = new FakeCommandRunner(new SdkCommandResult(
+            Started: true,
+            ExitCode: 0,
+            StdOut: "go version go1.27rc2 windows/amd64",
+            StdErr: string.Empty,
+            TimedOut: false));
+        var service = new SdkImportVerificationService(runner);
+
+        var result = await service.VerifyAsync(record);
+
+        Assert.Equal(SdkRecordStatus.Usable, result.Record.Status);
+        Assert.Equal("1.27rc2", result.Record.Version);
+        Assert.NotNull(runner.LastEnvironment);
+        Assert.Equal(goRoot, runner.LastEnvironment!["GOROOT"]);
+    }
+
     private static SdkRecord NewRecord(SdkType type, string path, string version)
         => new(
             Id: $"{type.ToString().ToLowerInvariant()}-test",
@@ -99,6 +120,15 @@ public sealed class SdkImportVerificationServiceTests
         return root;
     }
 
+    private static string CreateGoRoot(string leafName)
+    {
+        var root = CreateTemporaryDirectory(leafName);
+        Directory.CreateDirectory(Path.Combine(root, "bin"));
+        File.WriteAllText(Path.Combine(root, "bin", "go.exe"), string.Empty);
+        File.WriteAllText(Path.Combine(root, "bin", "gofmt.exe"), string.Empty);
+        return root;
+    }
+
     private static string CreateTemporaryDirectory(string leafName)
     {
         var parent = Path.Combine(Path.GetTempPath(), "DevSwitch.Tests", Guid.NewGuid().ToString("N"));
@@ -107,7 +137,7 @@ public sealed class SdkImportVerificationServiceTests
         return path;
     }
 
-    private sealed class FakeCommandRunner : ISdkCommandRunner
+    private sealed class FakeCommandRunner : ISdkCommandEnvironmentRunner
     {
         private readonly SdkCommandResult result;
 
@@ -120,10 +150,25 @@ public sealed class SdkImportVerificationServiceTests
 
         public string? LastFileName { get; private set; }
 
-        public Task<SdkCommandResult> RunAsync(string fileName, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public IReadOnlyDictionary<string, string>? LastEnvironment { get; private set; }
+
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default)
+            => RunAsync(fileName, arguments, timeout, new Dictionary<string, string>(), cancellationToken);
+
+        public Task<SdkCommandResult> RunAsync(
+            string fileName,
+            IReadOnlyList<string> arguments,
+            TimeSpan timeout,
+            IReadOnlyDictionary<string, string> environment,
+            CancellationToken cancellationToken = default)
         {
             InvocationCount++;
             LastFileName = fileName;
+            LastEnvironment = environment;
             return Task.FromResult(result);
         }
     }
